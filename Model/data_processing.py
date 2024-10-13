@@ -1,40 +1,43 @@
 import pandas as pd
 import numpy as np
-import yfinance as yf
 from datetime import datetime, timedelta
-import time
 from Utils.utils import handle_nan_inf
 import logging
+from Data.data_acquisition import DataAcquisition
 
 logger = logging.getLogger(__name__)
 
 class DataProcessor:
     def __init__(self, config):
         self.config = config
+        self.data_dir = config.get('data_dir', 'Data/csv_files')  # Default to 'Data/csv_files' if not specified
 
     def load_data(self):
         data = {}
-        end_date = datetime.now()
+        end_date = datetime.now().strftime('%Y-%m-%d')
         max_retries = 5
         retry_delay = 5  # seconds
 
+        data_acquisition = DataAcquisition(self.config['asset'], self.config['timeframes'], self.data_dir)
+
         for tf in self.config['timeframes']:
-            logger.info(f"Downloading data for timeframe: {tf}")
+            logger.info(f"Loading data for timeframe: {tf}")
             
             if tf == '1m':
-                start_date = end_date - timedelta(days=7)
+                start_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
             elif tf in ['5m', '15m']:
-                start_date = end_date - timedelta(days=60)
+                start_date = (datetime.now() - timedelta(days=60)).strftime('%Y-%m-%d')
             else:
-                start_date = end_date - timedelta(days=730)  # 2 years
+                start_date = (datetime.now() - timedelta(days=730)).strftime('%Y-%m-%d')  # 2 years
             
             for attempt in range(max_retries):
                 try:
-                    df = yf.download(self.config['asset'], start=start_date, end=end_date, interval=tf)
+                    data_acquisition.fetch_data(start_date, end_date)
+                    df = data_acquisition.get_data(tf)
                     if df.empty:
                         logger.warning(f"Empty DataFrame for timeframe {tf}")
                     else:
-                        logger.info(f"Downloaded {len(df)} rows for timeframe {tf}")
+                        logger.info(f"Loaded {len(df)} rows for timeframe {tf}")
                         if df.index.tz is not None:
                             df.index = df.index.tz_convert('UTC')
                         else:
@@ -42,15 +45,15 @@ class DataProcessor:
                         data[tf] = df
                     break
                 except Exception as e:
-                    logger.error(f"Error downloading data for timeframe {tf} (Attempt {attempt + 1}/{max_retries}): {str(e)}")
+                    logger.error(f"Error loading data for timeframe {tf} (Attempt {attempt + 1}/{max_retries}): {str(e)}")
                     if attempt < max_retries - 1:
                         logger.info(f"Retrying in {retry_delay} seconds...")
                         time.sleep(retry_delay)
                     else:
-                        logger.error(f"Failed to download data for timeframe {tf} after {max_retries} attempts")
+                        logger.error(f"Failed to load data for timeframe {tf} after {max_retries} attempts")
         
         if not data:
-            raise ValueError("No data could be downloaded for any timeframe")
+            raise ValueError("No data could be loaded for any timeframe")
         
         return data
 

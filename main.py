@@ -44,6 +44,7 @@ def load_config():
         'max_position_size': 1.0,
         'sequence_length': 100,
         'model_save_path': 'model_params.pth',
+        'data_dir': 'Data/csv_files',  # Add this line for the data directory
     }
     return config
 
