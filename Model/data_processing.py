@@ -1,54 +1,38 @@
 import pandas as pd
 import numpy as np
-import yfinance as yf
-from datetime import datetime, timedelta
-import time
+import os
 from Utils.utils import handle_nan_inf
 
 class DataProcessor:
     def __init__(self, config):
         self.config = config
+        self.freq_map = {
+            '1m': '1min',
+            '5m': '5min',
+            '15m': '15min',
+            '1h': '1h',
+            '1d': 'D'
+        }
 
     def load_data(self):
         data = {}
-        end_date = datetime.now()
-        max_retries = 5
-        retry_delay = 5  # seconds
-
         for tf in self.config['timeframes']:
-            print(f"Downloading data for timeframe: {tf}")
-            
-            if tf == '1m':
-                start_date = end_date - timedelta(days=7)
-            elif tf in ['5m', '15m']:
-                start_date = end_date - timedelta(days=60)
+            file_path = os.path.join('Data', f"{self.config['asset']}_{tf}.csv")
+            if os.path.exists(file_path):
+                df = pd.read_csv(file_path, index_col=0, parse_dates=True)
+                # Ensure index is timezone-aware UTC
+                if df.index.tz is None:
+                    df.index = pd.to_datetime(df.index, utc=True)
+                else:
+                    df.index = df.index.tz_convert('UTC')
+                # Remove duplicate indices
+                df = df[~df.index.duplicated(keep='first')]
+                # Set the frequency
+                df = df.asfreq(self.freq_map[tf])
+                data[tf] = df
+                print(f"Loaded {len(df)} rows for timeframe {tf}")
             else:
-                start_date = end_date - timedelta(days=730)  # 2 years
-            
-            for attempt in range(max_retries):
-                try:
-                    df = yf.download(self.config['asset'], start=start_date, end=end_date, interval=tf)
-                    if df.empty:
-                        print(f"Warning: Empty DataFrame for timeframe {tf}")
-                    else:
-                        print(f"Downloaded {len(df)} rows for timeframe {tf}")
-                        if df.index.tz is not None:
-                            df.index = df.index.tz_convert('UTC')
-                        else:
-                            df.index = df.index.tz_localize('UTC', nonexistent='shift_forward')
-                        data[tf] = df
-                    break
-                except Exception as e:
-                    print(f"Error downloading data for timeframe {tf} (Attempt {attempt + 1}/{max_retries}): {e}")
-                    if attempt < max_retries - 1:
-                        print(f"Retrying in {retry_delay} seconds...")
-                        time.sleep(retry_delay)
-                    else:
-                        print(f"Failed to download data for timeframe {tf} after {max_retries} attempts")
-        
-        if not data:
-            raise ValueError("No data could be downloaded for any timeframe")
-        
+                print(f"Warning: No data file found for timeframe {tf}")
         return data
 
     def process_data(self, data):
@@ -58,6 +42,7 @@ class DataProcessor:
                 print(f"Skipping empty DataFrame for timeframe {tf}")
                 continue
             
+            df = df.copy()  # Create a copy to avoid SettingWithCopyWarning
             df['returns'] = df['Close'].pct_change()
             df['log_returns'] = np.log(df['Close'] / df['Close'].shift(1))
             df['Volatility'] = df['returns'].rolling(window=20).std() * np.sqrt(252)
@@ -68,9 +53,6 @@ class DataProcessor:
             
             processed_data[tf] = df
             print(f"Processed {len(df)} rows for timeframe {tf}")
-        
-        if not processed_data:
-            raise ValueError("No data could be processed for any timeframe")
         
         processed_data = self.align_timeframes(processed_data)
         
@@ -90,28 +72,25 @@ class DataProcessor:
             return df.iloc[-seq_length:]
         elif len(df) < seq_length:
             pad_length = seq_length - len(df)
-            pad_df = pd.DataFrame(index=range(pad_length), columns=df.columns)
-            return pd.concat([pad_df, df]).reset_index(drop=True)
+            pad_index = pd.date_range(end=df.index[0], periods=pad_length, freq=df.index.freq)
+            pad_df = pd.DataFrame(index=pad_index, columns=df.columns).fillna(0)
+            return pd.concat([pad_df, df])
         else:
             return df
 
     def align_timeframes(self, data):
-        if not data:
-            raise ValueError("No data to align")
-        
         aligned_data = {}
         base_tf = max(data.keys(), key=lambda x: len(data[x]))
         base_index = data[base_tf].index
 
         for tf, df in data.items():
-            if df.index.tz is None:
-                df.index = df.index.tz_localize('UTC', nonexistent='shift_forward')
-            elif df.index.tz != 'UTC':
-                df.index = df.index.tz_convert('UTC')
-            
-            aligned_df = df.reindex(base_index, method='ffill')
-            aligned_df = self.pad_sequence(aligned_df)
-            aligned_data[tf] = aligned_df
+            if tf == base_tf:
+                aligned_data[tf] = df
+            else:
+                resampled_df = df.resample(self.freq_map[base_tf]).last().ffill()
+                aligned_df = resampled_df.reindex(base_index, method='ffill')
+                aligned_df = self.pad_sequence(aligned_df)
+                aligned_data[tf] = aligned_df
             print(f"Aligned {len(aligned_data[tf])} rows for timeframe {tf}")
 
         return aligned_data

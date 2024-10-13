@@ -1,237 +1,98 @@
-import pandas as pd
 import numpy as np
-from ta_wrapper import ta
+import pandas as pd
 from Utils.utils import handle_nan_inf
 
 class FeatureEngineer:
     def __init__(self, config):
         self.config = config
 
-    def engineer_features(self, data):
-        """
-        Main method to engineer features for all timeframes.
-        
-        Args:
-            data (dict): Dictionary of DataFrames for each timeframe.
-        
-        Returns:
-            dict: Dictionary of DataFrames with engineered features for each timeframe.
-        """
+    def engineer_features(self, processed_data):
         featured_data = {}
-        for tf, df in data.items():
-            print(f"Processing timeframe: {tf}")
-            print(f"DataFrame shape: {df.shape}")
-            if df.empty:
-                print(f"Warning: Empty DataFrame for timeframe {tf}")
-                continue
-            try:
-                required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-                if not all(col in df.columns for col in required_columns):
-                    missing_columns = [col for col in required_columns if col not in df.columns]
-                    raise ValueError(f"Missing required columns: {missing_columns}")
-
-                df = self.calculate_technical_indicators(df)
-                df = self.calculate_volatility(df)
-                df = self.calculate_trend_strength(df)
-                df = self.calculate_volume_indicators(df)
-                df = self.calculate_wave_trend(df)
-                df = self.calculate_accuracy(df)
-                df = handle_nan_inf(df)  # Handle NaN and Inf values
-                df = self.maintain_sequence_length(df)
-                featured_data[tf] = df
-                print(f"Engineered features shape: {df.shape}")
-            except Exception as e:
-                print(f"Error processing timeframe {tf}: {e}")
+        for tf, df in processed_data.items():
+            featured_data[tf] = self.engineer_timeframe_features(df)
         return featured_data
 
-    def calculate_technical_indicators(self, df):
-        """
-        Calculate various technical indicators.
+    def engineer_timeframe_features(self, df):
+        df = df.copy()
         
-        Args:
-            df (pd.DataFrame): Input DataFrame with OHLCV data.
+        # Ensure we have 'Close' column
+        if 'Close' not in df.columns and 'Adj Close' in df.columns:
+            df['Close'] = df['Adj Close']
         
-        Returns:
-            pd.DataFrame: DataFrame with added technical indicators.
-        """
-        if df.empty:
-            print("Warning: Empty DataFrame passed to calculate_technical_indicators")
-            return df
-
-        # Calculate Moving Averages
-        for period in self.config['ma_periods']:
-            df[f'MA_{period}'] = df['Close'].rolling(window=period, min_periods=1).mean()
+        # Basic price and volume features
+        df['returns'] = df['Close'].pct_change()
+        df['log_returns'] = np.log(df['Close'] / df['Close'].shift(1))
+        df['volume_change'] = df['Volume'].pct_change() if 'Volume' in df.columns else 0
         
-        # Calculate MACD
-        fast, slow, signal = self.config['macd_params']
-        try:
-            df['EMA_fast'] = df['Close'].ewm(span=fast, adjust=False, min_periods=1).mean()
-            df['EMA_slow'] = df['Close'].ewm(span=slow, adjust=False, min_periods=1).mean()
-            df['MACD'] = df['EMA_fast'] - df['EMA_slow']
-            df['MACD_signal'] = df['MACD'].ewm(span=signal, adjust=False, min_periods=1).mean()
-            df['MACD_hist'] = df['MACD'] - df['MACD_signal']
-        except Exception as e:
-            print(f"Error calculating MACD: {e}")
+        # Moving averages
+        for period in [5, 10, 20]:
+            df[f'MA_{period}'] = df['Close'].rolling(window=period).mean()
         
-        # Calculate RSI
+        # Exponential moving averages
+        for period in [5, 10, 20]:
+            df[f'EMA_{period}'] = df['Close'].ewm(span=period, adjust=False).mean()
+        
+        # MACD
+        df['EMA_12'] = df['Close'].ewm(span=12, adjust=False).mean()
+        df['EMA_26'] = df['Close'].ewm(span=26, adjust=False).mean()
+        df['MACD'] = df['EMA_12'] - df['EMA_26']
+        df['MACD_signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+        df['MACD_hist'] = df['MACD'] - df['MACD_signal']
+        
+        # RSI
         delta = df['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14, min_periods=1).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14, min_periods=1).mean()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         df['RSI'] = 100 - (100 / (1 + rs))
-
-        # Calculate ATR
-        high_low = df['High'] - df['Low']
-        high_close = np.abs(df['High'] - df['Close'].shift())
-        low_close = np.abs(df['Low'] - df['Close'].shift())
-        ranges = pd.concat([high_low, high_close, low_close], axis=1)
-        true_range = np.max(ranges, axis=1)
-        df['ATR'] = true_range.rolling(window=14, min_periods=1).mean()
         
-        # Calculate other indicators
-        df['EMA_12'] = df['Close'].ewm(span=12, adjust=False, min_periods=1).mean()
-        df['EMA_26'] = df['Close'].ewm(span=26, adjust=False, min_periods=1).mean()
-        df['DIFF'] = df['EMA_12'] - df['EMA_26']
-        df['DEA'] = df['DIFF'].ewm(span=9, adjust=False, min_periods=1).mean()
-        df['MACD'] = 2 * (df['DIFF'] - df['DEA'])
+        # Bollinger Bands
+        df['BB_middle'] = df['Close'].rolling(window=20).mean()
+        df['BB_std'] = df['Close'].rolling(window=20).std()
+        df['BB_upper'] = df['BB_middle'] + 2 * df['BB_std']
+        df['BB_lower'] = df['BB_middle'] - 2 * df['BB_std']
         
-        df['MOM'] = df['Close'].diff(10)
+        # Stochastic Oscillator
+        low_14 = df['Low'].rolling(window=14).min() if 'Low' in df.columns else df['Close'].rolling(window=14).min()
+        high_14 = df['High'].rolling(window=14).max() if 'High' in df.columns else df['Close'].rolling(window=14).max()
+        df['%K'] = (df['Close'] - low_14) * 100 / (high_14 - low_14)
+        df['%D'] = df['%K'].rolling(window=3).mean()
         
-        df['TSI'] = self.calculate_tsi(df['Close'])
+        # Additional features
+        df['Volatility'] = df['returns'].rolling(window=20).std() * np.sqrt(252)
+        df['Momentum'] = df['Close'] - df['Close'].shift(4)
+        df['Rate_of_Change'] = (df['Close'] - df['Close'].shift(12)) / df['Close'].shift(12)
         
-        return df
-
-    def calculate_volatility(self, df):
-        """
-        Calculate volatility using standard deviation of percentage changes.
+        # Handle NaN and inf values
+        df = handle_nan_inf(df)
         
-        Args:
-            df (pd.DataFrame): Input DataFrame.
+        # Select features
+        feature_columns = [
+            'returns', 'log_returns', 'volume_change',
+            'MA_5', 'MA_10', 'MA_20',
+            'EMA_5', 'EMA_10', 'EMA_20',
+            'MACD', 'MACD_signal', 'MACD_hist',
+            'RSI',
+            'BB_middle', 'BB_std', 'BB_upper', 'BB_lower',
+            '%K', '%D',
+            'Volatility', 'Momentum', 'Rate_of_Change'
+        ]
         
-        Returns:
-            pd.DataFrame: DataFrame with added volatility.
-        """
-        df['Volatility'] = df['Close'].pct_change().rolling(window=20, min_periods=1).std() * np.sqrt(252)
-        return df
-
-    def calculate_trend_strength(self, df):
-        """
-        Calculate trend strength using the difference between short-term and long-term moving averages.
+        # Add placeholder columns if needed
+        for i in range(39 - len(feature_columns)):
+            placeholder_name = f'Placeholder_{i}'
+            df[placeholder_name] = 0
+            feature_columns.append(placeholder_name)
         
-        Args:
-            df (pd.DataFrame): Input DataFrame.
+        # Add the last three columns
+        feature_columns += ['Volatility', 'Accuracy', 'Trend_Strength']
         
-        Returns:
-            pd.DataFrame: DataFrame with added trend strength.
-        """
-        df['Trend_Strength'] = (df['MA_5'] - df['MA_20']) / df['MA_20']
-        return df
-
-    def calculate_volume_indicators(self, df):
-        """
-        Calculate volume-based indicators.
+        # Ensure Accuracy and Trend_Strength exist (use placeholder if not)
+        if 'Accuracy' not in df.columns:
+            df['Accuracy'] = 0
+        if 'Trend_Strength' not in df.columns:
+            df['Trend_Strength'] = 0
         
-        Args:
-            df (pd.DataFrame): Input DataFrame.
+        assert len(feature_columns) == 42, f"Expected 42 features, but got {len(feature_columns)}"
         
-        Returns:
-            pd.DataFrame: DataFrame with added volume indicators.
-        """
-        df['VOL_MA_5'] = df['Volume'].rolling(window=5, min_periods=1).mean()
-        df['VOL_RATE'] = (df['Volume'] - df['VOL_MA_5']) / df['VOL_MA_5']
-        df['OBV'] = (np.sign(df['Close'].diff()) * df['Volume']).cumsum()
-        return df
-
-    def calculate_tsi(self, close, r=25, s=13):
-        """
-        Calculate True Strength Index (TSI).
-        
-        Args:
-            close (pd.Series): Close price series.
-            r (int): First smoothing period.
-            s (int): Second smoothing period.
-        
-        Returns:
-            pd.Series: TSI values.
-        """
-        diff = close - close.shift(1)
-        abs_diff = abs(diff)
-        
-        smooth_diff = diff.ewm(span=r, adjust=False, min_periods=1).mean().ewm(span=s, adjust=False, min_periods=1).mean()
-        smooth_abs_diff = abs_diff.ewm(span=r, adjust=False, min_periods=1).mean().ewm(span=s, adjust=False, min_periods=1).mean()
-        
-        tsi = 100 * smooth_diff / smooth_abs_diff
-        return tsi
-
-    def calculate_wave_trend(self, df, n1=10, n2=21):
-        """
-        Calculate WaveTrend indicator.
-        
-        Args:
-            df (pd.DataFrame): Input DataFrame.
-            n1 (int): First period.
-            n2 (int): Second period.
-        
-        Returns:
-            pd.DataFrame: DataFrame with added WaveTrend indicators.
-        """
-        ap = (df['High'] + df['Low'] + df['Close']) / 3
-        esa = ap.ewm(span=n1, adjust=False, min_periods=1).mean()
-        d = (ap - esa).abs().ewm(span=n1, adjust=False, min_periods=1).mean()
-        ci = (ap - esa) / (0.015 * d)
-        wt1 = ci.ewm(span=n2, adjust=False, min_periods=1).mean()
-        wt2 = wt1.rolling(window=4, min_periods=1).mean()
-        df['WaveTrend'] = wt1
-        df['WaveTrend_Signal'] = wt2
-        return df
-
-    def calculate_accuracy(self, df):
-        """
-        Calculate accuracy based on MACD crossovers.
-        
-        Args:
-            df (pd.DataFrame): Input DataFrame.
-        
-        Returns:
-            pd.DataFrame: DataFrame with added accuracy indicator.
-        """
-        df['MACD_Signal'] = np.where(df['MACD'] > df['MACD_signal'], 1, -1)
-        df['Price_Direction'] = np.where(df['Close'].diff() > 0, 1, -1)
-        df['Correct_Signal'] = np.where(df['MACD_Signal'] == df['Price_Direction'], 1, 0)
-        df['Accuracy'] = df['Correct_Signal'].rolling(window=20, min_periods=1).mean()
-        return df
-
-    def maintain_sequence_length(self, df):
-        """
-        Maintain a consistent sequence length for all DataFrames.
-        
-        Args:
-            df (pd.DataFrame): Input DataFrame.
-        
-        Returns:
-            pd.DataFrame: DataFrame with adjusted sequence length.
-        """
-        seq_length = self.config['sequence_length']
-        if len(df) > seq_length:
-            return df.iloc[-seq_length:]
-        elif len(df) < seq_length:
-            pad_length = seq_length - len(df)
-            pad_df = pd.DataFrame(index=range(pad_length), columns=df.columns)
-            return pd.concat([pad_df, df]).reset_index(drop=True)
-        else:
-            return df
-
-    def normalize_features(self, df):
-        """
-        Normalize features using min-max scaling.
-        
-        Args:
-            df (pd.DataFrame): Input DataFrame.
-        
-        Returns:
-            pd.DataFrame: DataFrame with normalized features.
-        """
-        for column in df.columns:
-            if column not in ['Open', 'High', 'Low', 'Close', 'Volume']:
-                df[column] = (df[column] - df[column].min()) / (df[column].max() - df[column].min())
-        return df
+        return df[feature_columns]

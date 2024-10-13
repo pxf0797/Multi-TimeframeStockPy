@@ -1,0 +1,34 @@
+# General Configuration
+mode: 'optimize'  # Can be 'train', 'backtest', or 'optimize'
+
+# Data Configuration
+asset: 'BTC-USD'
+timeframes: ['5m', '15m', '1h', '1d']
+sequence_length: 100
+
+# Model Configuration
+input_size: 39  # Update this to match the number of features we're actually generating
+hidden_size: 40  # Set this to be divisible by num_heads
+num_layers: 2
+num_heads: 4
+output_size: 1
+learning_rate: 0.001
+batch_size: 32
+num_epochs: 100
+
+# Training Configuration
+model_save_path: 'model_params.pth'
+device: 'cpu'  # Change to 'cuda' if GPU is available
+
+# Optimization Configuration
+optimization_iterations: 50
+
+# Trading Configuration
+entry_threshold: 0.5
+exit_threshold: 0.3
+stop_loss: 0.02
+take_profit: 0.05
+max_position_size: 0.1
+
+# Risk Management
+risk_per_trade: 0.01

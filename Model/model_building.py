@@ -1,166 +1,95 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import numpy as np
-
-class DynamicWeightModule(nn.Module):
-    def __init__(self, hidden_size):
-        super(DynamicWeightModule, self).__init__()
-        self.weight_calc = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, 1)
-        )
-    
-    def forward(self, lstm_outputs, volatility, accuracy, trend_strength):
-        raw_weights = self.weight_calc(lstm_outputs)
-        adjusted_weights = raw_weights * (1 + accuracy) * (1 + trend_strength) * volatility
-        return torch.sigmoid(adjusted_weights)
 
 class MultiTimeframeLSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, num_heads, output_size):
         super(MultiTimeframeLSTM, self).__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
-        self.attention = nn.MultiheadAttention(hidden_size, num_heads)
-        self.dynamic_weight = DynamicWeightModule(hidden_size)
-        self.fc = nn.Linear(hidden_size, output_size)
-        self.dropout = nn.Dropout(0.2)
-    
+        self.attention = nn.MultiheadAttention(hidden_size, num_heads, batch_first=True)
+        self.fc = nn.Linear(hidden_size + 3, output_size)  # +3 for volatility, accuracy, trend_strength
+        
     def forward(self, x, volatility, accuracy, trend_strength):
+        # Print shapes for debugging
+        print(f"x shape: {x.shape}")
+        print(f"volatility shape: {volatility.shape}")
+        print(f"accuracy shape: {accuracy.shape}")
+        print(f"trend_strength shape: {trend_strength.shape}")
+
+        # LSTM layer
         lstm_out, _ = self.lstm(x)
         
-        dynamic_weights = self.dynamic_weight(lstm_out, volatility.unsqueeze(-1), accuracy.unsqueeze(-1), trend_strength.unsqueeze(-1))
-        weighted_lstm_out = lstm_out * dynamic_weights
+        # Self-attention layer
+        attn_out, _ = self.attention(lstm_out, lstm_out, lstm_out)
         
-        weighted_lstm_out = weighted_lstm_out.transpose(0, 1)
-        attended, _ = self.attention(weighted_lstm_out, weighted_lstm_out, weighted_lstm_out)
-        attended = attended.transpose(0, 1)
+        # Use the mean of the attention output across the time dimension
+        attn_mean = torch.mean(attn_out, dim=1)
         
-        attended = self.dropout(attended)
-        output = self.fc(attended)
-        return output, dynamic_weights
-
-class ModelBuilder:
-    def __init__(self, config):
-        self.config = config
-
-    def build_model(self, featured_data):
-        sample_df = next(iter(featured_data.values()))
-        input_size = len(sample_df.columns) - 2  # -2 for 'returns' and 'log_returns'
-        print(f"Building model with input_size: {input_size}")
-        model = MultiTimeframeLSTM(
-            input_size,
-            self.config['hidden_size'],
-            self.config['num_layers'],
-            self.config['num_heads'],
-            output_size=3  # signal strength, entry level, stop loss point
-        ).to(self.config['device'])
-        return model
-
-    def train_model(self, model, featured_data):
-        optimizer = optim.Adam(model.parameters(), lr=self.config['learning_rate'])
-        criterion = nn.MSELoss()
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5)
-
-        train_data, val_data = self.split_data(featured_data)
-
-        for epoch in range(self.config['epochs']):
-            model.train()
-            total_loss = 0
-            batch_count = 0
-            for tf, df in train_data.items():
-                try:
-                    X, y, volatility, accuracy, trend_strength = self.prepare_data(df)
-                    
-                    optimizer.zero_grad()
-                    outputs, _ = model(X.unsqueeze(0), volatility.unsqueeze(0), accuracy.unsqueeze(0), trend_strength.unsqueeze(0))
-                    loss = criterion(outputs.squeeze(0), y)
-                    if not torch.isnan(loss) and not torch.isinf(loss):
-                        loss.backward()
-                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                        optimizer.step()
-                        total_loss += loss.item()
-                        batch_count += 1
-                    else:
-                        print(f"Warning: NaN or Inf loss encountered in training for timeframe {tf}")
-                except Exception as e:
-                    print(f"Error processing timeframe {tf}: {e}")
-
-            model.eval()
-            val_loss = 0
-            val_batch_count = 0
-            with torch.no_grad():
-                for tf, df in val_data.items():
-                    try:
-                        X, y, volatility, accuracy, trend_strength = self.prepare_data(df)
-                        outputs, _ = model(X.unsqueeze(0), volatility.unsqueeze(0), accuracy.unsqueeze(0), trend_strength.unsqueeze(0))
-                        loss = criterion(outputs.squeeze(0), y)
-                        if not torch.isnan(loss) and not torch.isinf(loss):
-                            val_loss += loss.item()
-                            val_batch_count += 1
-                        else:
-                            print(f"Warning: NaN or Inf loss encountered in validation for timeframe {tf}")
-                    except Exception as e:
-                        print(f"Error processing validation data for timeframe {tf}: {e}")
-            
-            if batch_count > 0:
-                avg_train_loss = total_loss / batch_count
-            else:
-                avg_train_loss = float('nan')
-            
-            if val_batch_count > 0:
-                avg_val_loss = val_loss / val_batch_count
-                scheduler.step(avg_val_loss)
-            else:
-                avg_val_loss = float('nan')
-            
-            if (epoch + 1) % 10 == 0:
-                print(f'Epoch [{epoch+1}/{self.config["epochs"]}], Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}')
+        # Ensure all tensors have the same batch size and are 2D
+        batch_size = attn_mean.size(0)
+        volatility = volatility.view(batch_size, 1)
+        accuracy = accuracy.view(batch_size, 1)
+        trend_strength = trend_strength.view(batch_size, 1)
         
-        return model
+        # Print shapes after reshaping
+        print(f"attn_mean shape: {attn_mean.shape}")
+        print(f"volatility shape after reshape: {volatility.shape}")
+        print(f"accuracy shape after reshape: {accuracy.shape}")
+        print(f"trend_strength shape after reshape: {trend_strength.shape}")
 
-    def prepare_data(self, df):
-        required_columns = ['Volatility', 'Accuracy', 'Trend_Strength', 'returns', 'ATR']
-        if not all(col in df.columns for col in required_columns):
-            missing_columns = [col for col in required_columns if col not in df.columns]
-            raise ValueError(f"Missing required columns: {missing_columns}")
+        # Combine attention output with additional features
+        combined = torch.cat([attn_mean, volatility, accuracy, trend_strength], dim=1)
+        
+        # Print combined shape
+        print(f"combined shape: {combined.shape}")
 
-        X = torch.FloatTensor(df.drop(['returns', 'log_returns'], axis=1).values).to(self.config['device'])
-        y = torch.FloatTensor(df[['returns', 'Trend_Strength', 'ATR']].values).to(self.config['device'])
-        volatility = torch.FloatTensor(df['Volatility'].values).to(self.config['device'])
-        accuracy = torch.FloatTensor(df['Accuracy'].values).to(self.config['device'])
-        trend_strength = torch.FloatTensor(df['Trend_Strength'].values).to(self.config['device'])
+        # Final fully connected layer
+        out = self.fc(combined)
+        return out
 
-        # Check for NaN or Inf values
-        if torch.isnan(X).any() or torch.isinf(X).any():
-            raise ValueError("NaN or Inf values found in input data")
-        if torch.isnan(y).any() or torch.isinf(y).any():
-            raise ValueError("NaN or Inf values found in target data")
-
-        return X, y, volatility, accuracy, trend_strength
-
-    def split_data(self, data, train_ratio=0.8):
-        train_data = {}
-        val_data = {}
-        for tf, df in data.items():
-            split_idx = int(len(df) * train_ratio)
-            train_data[tf] = df.iloc[:split_idx]
-            val_data[tf] = df.iloc[split_idx:]
-        return train_data, val_data
-
-def print_model_summary(model, config):
-    print(model)
-    print(f"\nModel Parameter Count: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
-    
+def build_model(config):
     input_size = config['input_size']
-    sequence_length = config['sequence_length']
-    dummy_input = torch.randn(1, sequence_length, input_size)
-    dummy_volatility = torch.randn(1, sequence_length)
-    dummy_accuracy = torch.randn(1, sequence_length)
-    dummy_trend_strength = torch.randn(1, sequence_length)
+    hidden_size = config['hidden_size']
+    num_layers = config['num_layers']
+    num_heads = config['num_heads']
+    output_size = config['output_size']
     
-    with torch.no_grad():
-        output, _ = model(dummy_input, dummy_volatility, dummy_accuracy, dummy_trend_strength)
+    model = MultiTimeframeLSTM(input_size, hidden_size, num_layers, num_heads, output_size)
+    print(f"Model structure: {model}")
+    return model
+
+def train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs, device):
+    model.to(device)
+    for epoch in range(num_epochs):
+        model.train()
+        train_loss = 0
+        for batch in train_loader:
+            inputs, volatility, accuracy, trend_strength, targets = [b.to(device) for b in batch]
+            
+            # Print shapes of input tensors
+            print(f"inputs shape: {inputs.shape}")
+            print(f"volatility shape: {volatility.shape}")
+            print(f"accuracy shape: {accuracy.shape}")
+            print(f"trend_strength shape: {trend_strength.shape}")
+            print(f"targets shape: {targets.shape}")
+
+            optimizer.zero_grad()
+            outputs = model(inputs, volatility, accuracy, trend_strength)
+            loss = criterion(outputs, targets)
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item()
+        
+        model.eval()
+        val_loss = 0
+        with torch.no_grad():
+            for batch in val_loader:
+                inputs, volatility, accuracy, trend_strength, targets = [b.to(device) for b in batch]
+                outputs = model(inputs, volatility, accuracy, trend_strength)
+                loss = criterion(outputs, targets)
+                val_loss += loss.item()
+        
+        print(f'Epoch [{epoch+1}/{num_epochs}] Train Loss: {train_loss:.4f} Val Loss: {val_loss:.4f}')
     
-    print(f"\nInput shape: {dummy_input.shape}")
-    print(f"Output shape: {output.shape}")
+    return model
