@@ -1,83 +1,69 @@
 import pandas as pd
 import numpy as np
+from utils import calculate_sharpe_ratio, calculate_maximum_drawdown
 
 class Backtester:
-    def __init__(self, signals, initial_capital=100000):
-        self.signals = signals
-        self.initial_capital = initial_capital
-        self.positions = self.generate_positions()
-        self.portfolio = self.backtest_portfolio()
+    def __init__(self, config):
+        self.config = config
 
-    def generate_positions(self):
-        positions = pd.DataFrame(index=self.signals.index).fillna(0.0)
-        positions['Position'] = 0
-        positions.loc[self.signals['Buy'] == 1, 'Position'] = 1
-        positions.loc[self.signals['Sell'] == 1, 'Position'] = -1
-        return positions
+    def run_backtest(self, signals, data, dynamic_weights):
+        results = {}
+        for tf, signal in signals.items():
+            pnl = self.calculate_pnl(signal, data[tf])
+            sharpe = calculate_sharpe_ratio(pnl, self.config['risk_free_rate'])
+            max_drawdown = calculate_maximum_drawdown(pnl.cumsum())
+            win_rate = self.calculate_win_rate(pnl)
+            profit_loss_ratio = self.calculate_profit_loss_ratio(pnl)
+            
+            results[tf] = {
+                'Total Return': pnl.sum(),
+                'Sharpe Ratio': sharpe,
+                'Max Drawdown': max_drawdown,
+                'Win Rate': win_rate,
+                'Profit/Loss Ratio': profit_loss_ratio,
+                'Dynamic Weight': dynamic_weights[tf]
+            }
+        return results
 
-    def backtest_portfolio(self):
-        portfolio = pd.DataFrame(index=self.signals.index).fillna(0.0)
-        portfolio['Position'] = self.positions['Position']
-        portfolio['Close'] = self.signals['Close']
-        portfolio['Returns'] = portfolio['Close'].pct_change()
-        portfolio['Strategy'] = portfolio['Position'].shift(1) * portfolio['Returns']
-        
-        portfolio['Equity'] = (1 + portfolio['Strategy']).cumprod() * self.initial_capital
-        portfolio['DrawDown'] = (portfolio['Equity'] - portfolio['Equity'].cummax()) / portfolio['Equity'].cummax()
-        
-        # Add debugging information
-        print("Backtest Summary:")
-        print(f"Total trades: {(portfolio['Position'].diff() != 0).sum()}")
-        print(f"Profitable trades: {(portfolio['Strategy'] > 0).sum()}")
-        print(f"Unprofitable trades: {(portfolio['Strategy'] < 0).sum()}")
-        print(f"Win rate: {(portfolio['Strategy'] > 0).sum() / (portfolio['Strategy'] != 0).sum():.2%}")
-        print(f"Average profit per trade: ${portfolio['Strategy'][portfolio['Strategy'] > 0].mean():.2f}")
-        print(f"Average loss per trade: ${portfolio['Strategy'][portfolio['Strategy'] < 0].mean():.2f}")
-        
-        return portfolio
+    def calculate_pnl(self, signal, data):
+        position = signal['position_size']
+        returns = data['returns']
+        stop_loss_returns = np.minimum(returns, -signal['stop_loss'])
+        pnl = position * np.maximum(returns, stop_loss_returns)
+        return pnl
 
-    def calculate_performance_metrics(self):
-        total_return = (self.portfolio['Equity'].iloc[-1] - self.initial_capital) / self.initial_capital
-        sharpe_ratio = np.sqrt(252) * self.portfolio['Strategy'].mean() / self.portfolio['Strategy'].std() if self.portfolio['Strategy'].std() != 0 else np.nan
-        max_drawdown = self.portfolio['DrawDown'].min()
-        
-        return {
-            'Total Return': total_return,
-            'Sharpe Ratio': sharpe_ratio,
-            'Max Drawdown': max_drawdown
-        }
+    def calculate_win_rate(self, pnl):
+        return (pnl > 0).mean()
 
-def run_backtest(signals):
-    backtester = Backtester(signals)
-    performance_metrics = backtester.calculate_performance_metrics()
-    
-    print("\nBacktest Results:")
-    for metric, value in performance_metrics.items():
-        print(f"{metric}: {value:.2f}")
-    
-    return backtester.portfolio
+    def calculate_profit_loss_ratio(self, pnl):
+        profits = pnl[pnl > 0]
+        losses = pnl[pnl < 0]
+        if len(losses) == 0:
+            return np.inf
+        return profits.mean() / abs(losses.mean())
 
-if __name__ == "__main__":
-    # Example usage
-    dates = pd.date_range(start="2023-01-01", end="2023-12-31", freq="D")
-    close_prices = np.random.randn(len(dates)).cumsum() + 100
-    signals = pd.DataFrame({
-        'Close': close_prices,
-        'Signal': np.random.randn(len(dates)),
-        'Buy': np.random.choice([0, 1], size=len(dates), p=[0.9, 0.1]),
-        'Sell': np.random.choice([0, 1], size=len(dates), p=[0.9, 0.1])
-    }, index=dates)
-    
-    portfolio = run_backtest(signals)
-    
-    # Plot equity curve
-    import matplotlib.pyplot as plt
-    plt.figure(figsize=(12, 6))
-    plt.plot(portfolio.index, portfolio['Equity'])
-    plt.title('Equity Curve')
-    plt.xlabel('Date')
-    plt.ylabel('Equity')
-    plt.grid(True)
-    plt.savefig('equity_curve.png')
-    plt.close()
-    print("Equity curve plot saved as equity_curve.png")
+    def monte_carlo_simulation(self, signals, data, num_simulations=1000):
+        results = []
+        for _ in range(num_simulations):
+            shuffled_data = self.shuffle_data(data)
+            sim_results = self.run_backtest(signals, shuffled_data, {tf: 1/len(data) for tf in data})
+            results.append(sim_results)
+        return results
+
+    def shuffle_data(self, data):
+        shuffled_data = {}
+        for tf, df in data.items():
+            shuffled_data[tf] = df.sample(frac=1).reset_index(drop=True)
+        return shuffled_data
+
+    def sensitivity_analysis(self, model, featured_data, processed_data, param_ranges):
+        results = {}
+        for param, range_values in param_ranges.items():
+            param_results = []
+            for value in range_values:
+                self.config[param] = value
+                signals, _ = model.generate_signals(featured_data)
+                backtest_results = self.run_backtest(signals, processed_data, {tf: 1/len(processed_data) for tf in processed_data})
+                param_results.append((value, backtest_results))
+            results[param] = param_results
+        return results
