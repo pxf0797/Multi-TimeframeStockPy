@@ -16,8 +16,9 @@ class DataProcessor:
 
     def load_data(self):
         data = {}
+        asset_filename = self.config['asset'].replace('/', '-')  # Replace '/' with '-' for filename
         for tf in self.config['timeframes']:
-            file_path = os.path.join('Data', f"{self.config['asset']}_{tf}.csv")
+            file_path = os.path.join('Data', f"{asset_filename}_{tf}.csv")
             if os.path.exists(file_path):
                 df = pd.read_csv(file_path, index_col=0, parse_dates=True)
                 # Ensure index is timezone-aware UTC
@@ -80,6 +81,10 @@ class DataProcessor:
 
     def align_timeframes(self, data):
         aligned_data = {}
+        if not data:  # Check if data dictionary is empty
+            print("No data available for alignment.")
+            return aligned_data
+        
         base_tf = max(data.keys(), key=lambda x: len(data[x]))
         base_index = data[base_tf].index
 

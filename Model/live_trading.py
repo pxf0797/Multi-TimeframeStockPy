@@ -3,10 +3,10 @@ import torch
 import torch.optim as optim
 import numpy as np
 import pandas as pd
-from data_processing import DataProcessor
-from feature_engineering import FeatureEngineer
-from signal_generation import SignalGenerator
-from risk_management import RiskManager
+from Model.data_processing import DataProcessor
+from Model.feature_engineering import FeatureEngineer
+from Model.signal_generation import SignalGenerator
+from Model.risk_management import RiskManager
 from Utils.utils import log_trade, implement_circuit_breaker, setup_logging
 import ccxt
 import logging

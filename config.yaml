@@ -1,5 +1,5 @@
 # General Configuration
-mode: 'train'  # Can be 'train', 'backtest', 'optimize', or 'live_trading'
+mode: 'backtest'  # Can be 'train', 'backtest', 'optimize', or 'live_trading'
 
 # Data Configuration
 asset: 'BTC/USD'

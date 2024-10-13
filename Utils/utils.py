@@ -2,15 +2,74 @@ import yaml
 import logging
 import csv
 from datetime import datetime
+import numpy as np
+import torch
+from sklearn.model_selection import train_test_split
 
 def load_config(config_path='config.yaml'):
     with open(config_path, 'r') as file:
         return yaml.safe_load(file)
 
 def prepare_data_for_training(featured_data, config):
-    # Implement data preparation logic here
-    # This is a placeholder function
-    return featured_data, featured_data
+    # Print column names for debugging
+    print("Available columns:")
+    for tf, df in featured_data.items():
+        print(f"Timeframe {tf}: {df.columns.tolist()}")
+
+    # Combine data from all timeframes
+    combined_data = []
+    for tf, df in featured_data.items():
+        df_values = df.values
+        combined_data.append(df_values)
+    
+    # Stack the data from different timeframes
+    X = np.stack(combined_data, axis=1)
+    
+    # Extract required features
+    inputs = X[:, :, :39]  # Assuming the first 39 columns are the input features
+    volatility = X[:, :, 39]  # Assuming 'Volatility' is the 40th column
+    accuracy = X[:, :, 40]  # Assuming 'Accuracy' is the 41st column
+    trend_strength = X[:, :, 41]  # Assuming 'Trend_Strength' is the 42nd column
+    
+    # Use 'returns' as the target variable
+    y = featured_data[config['timeframes'][0]]['returns'].values[:-1]
+    
+    # Remove the last row to align all data
+    inputs = inputs[:-1]
+    volatility = volatility[:-1]
+    accuracy = accuracy[:-1]
+    trend_strength = trend_strength[:-1]
+    
+    # Remove any rows with NaN values
+    mask = ~np.isnan(y)
+    inputs = inputs[mask]
+    volatility = volatility[mask]
+    accuracy = accuracy[mask]
+    trend_strength = trend_strength[mask]
+    y = y[mask]
+    
+    # Split the data into training and validation sets
+    X_train, X_val, v_train, v_val, a_train, a_val, t_train, t_val, y_train, y_val = train_test_split(
+        inputs, volatility, accuracy, trend_strength, y, test_size=0.2, random_state=42
+    )
+    
+    # Convert to PyTorch tensors
+    train_data = torch.utils.data.TensorDataset(
+        torch.FloatTensor(X_train),
+        torch.FloatTensor(v_train),
+        torch.FloatTensor(a_train),
+        torch.FloatTensor(t_train),
+        torch.FloatTensor(y_train).unsqueeze(1)
+    )
+    val_data = torch.utils.data.TensorDataset(
+        torch.FloatTensor(X_val),
+        torch.FloatTensor(v_val),
+        torch.FloatTensor(a_val),
+        torch.FloatTensor(t_val),
+        torch.FloatTensor(y_val).unsqueeze(1)
+    )
+    
+    return train_data, val_data
 
 def log_trade(trade_info, log_file):
     with open(log_file, 'a', newline='') as file:
@@ -74,3 +133,21 @@ def calculate_risk_reward_ratio(trades):
     total_risk = sum(trade['risk'] for trade in trades)
     total_reward = sum(trade['reward'] for trade in trades)
     return total_reward / total_risk if total_risk != 0 else float('inf')
+
+def handle_nan_inf(data):
+    """
+    Handle NaN and Inf values in the data.
+    
+    :param data: numpy array or pandas DataFrame
+    :return: data with NaN and Inf values handled
+    """
+    if isinstance(data, np.ndarray):
+        # Replace inf with large finite numbers
+        data = np.nan_to_num(data, nan=0.0, posinf=1e30, neginf=-1e30)
+    else:  # Assume it's a pandas DataFrame
+        # Replace inf with large finite numbers
+        data = data.replace([np.inf, -np.inf], [1e30, -1e30])
+        # Fill NaN values with 0
+        data = data.fillna(0)
+    
+    return data

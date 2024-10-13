@@ -26,6 +26,12 @@ def process_data(config):
 
 def generate_signals(config, model, featured_data):
     signal_generator = SignalGenerator(config)
+    
+    # Print column names for debugging
+    print("Columns in featured_data:")
+    for tf, df in featured_data.items():
+        print(f"Timeframe {tf}: {df.columns.tolist()}")
+    
     signals, dynamic_weights = signal_generator.generate_signals(model, featured_data)
     s_comprehensive = signal_generator.generate_comprehensive_signal(signals, dynamic_weights, trend_consistency=1)
     trend_cons = np.mean([np.sign(s) for s in signals.values()])

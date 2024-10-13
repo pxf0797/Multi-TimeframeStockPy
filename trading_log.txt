@@ -1,0 +1,308 @@
+2024-10-13 17:03:40,059 - root - ERROR - An error occurred: max() iterable argument is empty
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 55, in main
+    processed_data, featured_data = process_data(config)
+                                    ^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 22, in process_data
+    processed_data = data_processor.process_data(raw_data)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/data_processing.py", line 57, in process_data
+    processed_data = self.align_timeframes(processed_data)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/data_processing.py", line 83, in align_timeframes
+    base_tf = max(data.keys(), key=lambda x: len(data[x]))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: max() iterable argument is empty
+2024-10-13 17:04:35,684 - root - ERROR - An error occurred: 3
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 65, in main
+    trained_model = train_model(model, train_loader, val_loader, criterion, optimizer, config['num_epochs'], config['device'])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/model_building.py", line 62, in train_model
+    for batch in train_loader:
+                 ^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 630, in __next__
+    data = self._next_data()
+           ^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 673, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/torch/utils/data/_utils/fetch.py", line 52, in fetch
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+            ~~~~~~~~~~~~^^^^^
+KeyError: 3
+2024-10-13 17:05:37,408 - root - ERROR - An error occurred: 'Close'
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3805, in get_loc
+    return self._engine.get_loc(casted_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "index.pyx", line 167, in pandas._libs.index.IndexEngine.get_loc
+  File "index.pyx", line 191, in pandas._libs.index.IndexEngine.get_loc
+  File "index.pyx", line 234, in pandas._libs.index.IndexEngine._get_loc_duplicates
+  File "index.pyx", line 242, in pandas._libs.index.IndexEngine._maybe_get_bool_indexer
+  File "index.pyx", line 134, in pandas._libs.index._unpack_bool_indexer
+KeyError: 'Close'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 58, in main
+    train_data, val_data = prepare_data_for_training(featured_data, config)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Utils/utils.py", line 24, in prepare_data_for_training
+    y = featured_data[config['timeframes'][0]]['Close'].pct_change().shift(-1).values[:-1]
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/pandas/core/frame.py", line 4102, in __getitem__
+    indexer = self.columns.get_loc(key)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3812, in get_loc
+    raise KeyError(key) from err
+KeyError: 'Close'
+2024-10-13 17:06:14,124 - root - ERROR - An error occurred: 'close'
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3805, in get_loc
+    return self._engine.get_loc(casted_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "index.pyx", line 167, in pandas._libs.index.IndexEngine.get_loc
+  File "index.pyx", line 191, in pandas._libs.index.IndexEngine.get_loc
+  File "index.pyx", line 234, in pandas._libs.index.IndexEngine._get_loc_duplicates
+  File "index.pyx", line 242, in pandas._libs.index.IndexEngine._maybe_get_bool_indexer
+  File "index.pyx", line 134, in pandas._libs.index._unpack_bool_indexer
+KeyError: 'close'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 58, in main
+    train_data, val_data = prepare_data_for_training(featured_data, config)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Utils/utils.py", line 30, in prepare_data_for_training
+    y = featured_data[config['timeframes'][0]]['close'].pct_change().shift(-1).values[:-1]
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/pandas/core/frame.py", line 4102, in __getitem__
+    indexer = self.columns.get_loc(key)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3812, in get_loc
+    raise KeyError(key) from err
+KeyError: 'close'
+2024-10-13 17:06:57,912 - root - ERROR - An error occurred: not enough values to unpack (expected 5, got 2)
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 65, in main
+    trained_model = train_model(model, train_loader, val_loader, criterion, optimizer, config['num_epochs'], config['device'])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/model_building.py", line 63, in train_model
+    inputs, volatility, accuracy, trend_strength, targets = [b.to(device) for b in batch]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: not enough values to unpack (expected 5, got 2)
+2024-10-13 17:07:44,552 - root - ERROR - An error occurred: Tensors must have same number of dimensions: got 3 and 2
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 65, in main
+    trained_model = train_model(model, train_loader, val_loader, criterion, optimizer, config['num_epochs'], config['device'])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/model_building.py", line 73, in train_model
+    outputs = model(inputs, volatility, accuracy, trend_strength)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/model_building.py", line 38, in forward
+    combined = torch.cat([lstm_out, volatility, accuracy, trend_strength], dim=1)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Tensors must have same number of dimensions: got 3 and 2
+2024-10-13 17:08:23,867 - root - INFO - Model training completed and saved.
+2024-10-13 17:10:23,378 - root - ERROR - An error occurred: "['Open' 'High' 'Low' 'Close' 'Volume' 'returns' 'log_returns'] not found in axis"
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 75, in main
+    signals, dynamic_weights, s_comprehensive, trend_cons = generate_signals(config, model, featured_data)
+                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 29, in generate_signals
+    signals, dynamic_weights = signal_generator.generate_signals(model, featured_data)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/signal_generation.py", line 16, in generate_signals
+    features = df.drop(['Open', 'High', 'Low', 'Close', 'Volume', 'returns', 'log_returns'], axis=1)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/pandas/core/frame.py", line 5581, in drop
+    return super().drop(
+           ^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/pandas/core/generic.py", line 4788, in drop
+    obj = obj._drop_axis(labels, axis, level=level, errors=errors)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/pandas/core/generic.py", line 4859, in _drop_axis
+    raise KeyError(f"{labels} not found in axis")
+KeyError: "['Open' 'High' 'Low' 'Close' 'Volume' 'returns' 'log_returns'] not found in axis"
+2024-10-13 17:11:14,204 - root - ERROR - An error occurred: "['Open' 'High' 'Low' 'Close' 'Volume' 'returns' 'log_returns'] not found in axis"
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 81, in main
+    signals, dynamic_weights, s_comprehensive, trend_cons = generate_signals(config, model, featured_data)
+                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 35, in generate_signals
+    signals, dynamic_weights = signal_generator.generate_signals(model, featured_data)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/signal_generation.py", line 16, in generate_signals
+    features = df.drop(['Open', 'High', 'Low', 'Close', 'Volume', 'returns', 'log_returns'], axis=1)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/pandas/core/frame.py", line 5581, in drop
+    return super().drop(
+           ^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/pandas/core/generic.py", line 4788, in drop
+    obj = obj._drop_axis(labels, axis, level=level, errors=errors)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/pandas/core/generic.py", line 4859, in _drop_axis
+    raise KeyError(f"{labels} not found in axis")
+KeyError: "['Open' 'High' 'Low' 'Close' 'Volume' 'returns' 'log_returns'] not found in axis"
+2024-10-13 17:12:09,089 - root - ERROR - An error occurred: input.size(-1) must be equal to input_size. Expected 39, got 40
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 81, in main
+    signals, dynamic_weights, s_comprehensive, trend_cons = generate_signals(config, model, featured_data)
+                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 35, in generate_signals
+    signals, dynamic_weights = signal_generator.generate_signals(model, featured_data)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/signal_generation.py", line 30, in generate_signals
+    output = model(features.unsqueeze(0), volatility.unsqueeze(0), accuracy.unsqueeze(0), trend_strength.unsqueeze(0))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/model_building.py", line 20, in forward
+    lstm_out, _ = self.lstm(x)
+                  ^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1553, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1562, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/torch/nn/modules/rnn.py", line 898, in forward
+    self.check_forward_args(input, hx, batch_sizes)
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/torch/nn/modules/rnn.py", line 827, in check_forward_args
+    self.check_input(input, batch_sizes)
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/multi-time/lib/python3.12/site-packages/torch/nn/modules/rnn.py", line 246, in check_input
+    raise RuntimeError(
+RuntimeError: input.size(-1) must be equal to input_size. Expected 39, got 40
+2024-10-13 17:13:04,004 - root - ERROR - An error occurred: operands could not be broadcast together with shapes (100,2) (100,) 
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 81, in main
+    signals, dynamic_weights, s_comprehensive, trend_cons = generate_signals(config, model, featured_data)
+                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 35, in generate_signals
+    signals, dynamic_weights = signal_generator.generate_signals(model, featured_data)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/signal_generation.py", line 48, in generate_signals
+    dynamic_weights[tf] = self.calculate_dynamic_weight(df)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/signal_generation.py", line 57, in calculate_dynamic_weight
+    weight = (1 / volatility) * np.abs(trend_strength)
+             ~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~
+ValueError: operands could not be broadcast together with shapes (100,2) (100,) 
+2024-10-13 17:13:45,232 - root - ERROR - An error occurred: operands could not be broadcast together with shapes (100,2) (100,) 
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 81, in main
+    signals, dynamic_weights, s_comprehensive, trend_cons = generate_signals(config, model, featured_data)
+                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 35, in generate_signals
+    signals, dynamic_weights = signal_generator.generate_signals(model, featured_data)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/signal_generation.py", line 48, in generate_signals
+    dynamic_weights[tf] = self.calculate_dynamic_weight(df)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/signal_generation.py", line 61, in calculate_dynamic_weight
+    weight = (1 / volatility) * np.abs(trend_strength)
+             ~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~
+ValueError: operands could not be broadcast together with shapes (100,2) (100,) 
+2024-10-13 17:14:23,540 - root - ERROR - An error occurred: operands could not be broadcast together with shapes (100,2) (100,) 
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 81, in main
+    signals, dynamic_weights, s_comprehensive, trend_cons = generate_signals(config, model, featured_data)
+                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 35, in generate_signals
+    signals, dynamic_weights = signal_generator.generate_signals(model, featured_data)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/signal_generation.py", line 51, in generate_signals
+    dynamic_weights[tf] = self.calculate_dynamic_weight(df)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/signal_generation.py", line 63, in calculate_dynamic_weight
+    weight = (1 / volatility) * np.abs(trend_strength)
+             ~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~
+ValueError: operands could not be broadcast together with shapes (100,2) (100,) 
+2024-10-13 17:15:05,340 - root - ERROR - An error occurred: operands could not be broadcast together with shapes (100,2) (100,) 
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 81, in main
+    signals, dynamic_weights, s_comprehensive, trend_cons = generate_signals(config, model, featured_data)
+                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 35, in generate_signals
+    signals, dynamic_weights = signal_generator.generate_signals(model, featured_data)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/signal_generation.py", line 52, in generate_signals
+    dynamic_weights[tf] = self.calculate_dynamic_weight(features)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/signal_generation.py", line 67, in calculate_dynamic_weight
+    weight = (1 / volatility) * np.abs(trend_strength)
+             ~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~
+ValueError: operands could not be broadcast together with shapes (100,2) (100,) 
+2024-10-13 17:16:06,746 - root - ERROR - An error occurred: max() iterable argument is empty
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 83, in main
+    results, overall_performance = run_backtest(config, signals, dynamic_weights, featured_data)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 48, in run_backtest
+    overall_performance = backtester.calculate_overall_performance(results)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/backtesting.py", line 56, in calculate_overall_performance
+    overall_max_drawdown = max(result['Max Drawdown'] for result in results.values() if not np.isnan(result['Max Drawdown']))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: max() iterable argument is empty
+2024-10-13 17:17:05,153 - root - ERROR - An error occurred: object of type 'numpy.float32' has no len()
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 83, in main
+    results, overall_performance = run_backtest(config, signals, dynamic_weights, featured_data)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 47, in run_backtest
+    results = backtester.run_backtest(signals, featured_data, dynamic_weights)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/backtesting.py", line 18, in run_backtest
+    if len(signal) < len(df):
+       ^^^^^^^^^^^
+TypeError: object of type 'numpy.float32' has no len()
+2024-10-13 17:17:49,876 - root - ERROR - An error occurred: 'float' object is not subscriptable
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 83, in main
+    results, overall_performance = run_backtest(config, signals, dynamic_weights, featured_data)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 47, in run_backtest
+    results = backtester.run_backtest(signals, featured_data, dynamic_weights)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/backtesting.py", line 42, in run_backtest
+    win_rate = calculate_win_rate(df['PnL'])
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Utils/utils.py", line 110, in calculate_win_rate
+    winning_trades = sum(1 for trade in trades if trade['profit'] > 0)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Utils/utils.py", line 110, in <genexpr>
+    winning_trades = sum(1 for trade in trades if trade['profit'] > 0)
+                                                  ~~~~~^^^^^^^^^^
+TypeError: 'float' object is not subscriptable
+2024-10-13 17:19:19,668 - root - ERROR - An error occurred: 'float' object is not subscriptable
+Traceback (most recent call last):
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 83, in main
+    results, overall_performance = run_backtest(config, signals, dynamic_weights, featured_data)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/main.py", line 47, in run_backtest
+    results = backtester.run_backtest(signals, featured_data, dynamic_weights)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Model/backtesting.py", line 43, in run_backtest
+    profit_factor = calculate_profit_factor(df['PnL'])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Utils/utils.py", line 114, in calculate_profit_factor
+    gross_profit = sum(trade['profit'] for trade in trades if trade['profit'] > 0)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/xfpan/Desktop/StockPy/Multi-TimeframeStockPy/Utils/utils.py", line 114, in <genexpr>
+    gross_profit = sum(trade['profit'] for trade in trades if trade['profit'] > 0)
+                                                              ~~~~~^^^^^^^^^^
+TypeError: 'float' object is not subscriptable

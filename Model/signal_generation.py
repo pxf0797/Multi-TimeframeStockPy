@@ -12,21 +12,27 @@ class SignalGenerator:
         for tf, df in featured_data.items():
             print(f"\nDebugging signal generation for timeframe {tf}:")
             
-            # Include all features except 'Open', 'High', 'Low', 'Close', 'Volume', 'returns', 'log_returns'
-            features = df.drop(['Open', 'High', 'Low', 'Close', 'Volume', 'returns', 'log_returns'], axis=1)
+            # Only use the last sequence_length rows
+            df = df.iloc[-self.config['sequence_length']:]
+            
+            # Only drop 'returns' and 'log_returns' if they exist
+            columns_to_drop = [col for col in ['returns', 'log_returns'] if col in df.columns]
+            features = df.drop(columns_to_drop, axis=1, errors='ignore')
             
             print(f"Features included: {features.columns.tolist()}")
             print(f"Number of features: {len(features.columns)}")
+            print(f"Number of rows: {len(features)}")
             
-            features = torch.FloatTensor(features.values).to(self.config['device'])
+            # Convert to tensor and only use the first 39 features
+            features_tensor = torch.FloatTensor(features.values[:, :39]).to(self.config['device'])
             
-            # Extract required additional features
-            volatility = features[:, features.shape[1] - 3]
-            accuracy = features[:, features.shape[1] - 2]
-            trend_strength = features[:, features.shape[1] - 1]
+            # Extract required additional features (now the last 3 columns)
+            volatility = features_tensor[:, -3]
+            accuracy = features_tensor[:, -2]
+            trend_strength = features_tensor[:, -1]
             
             with torch.no_grad():
-                output = model(features.unsqueeze(0), volatility.unsqueeze(0), accuracy.unsqueeze(0), trend_strength.unsqueeze(0))
+                output = model(features_tensor.unsqueeze(0), volatility.unsqueeze(0), accuracy.unsqueeze(0), trend_strength.unsqueeze(0))
                 signal = output.squeeze().cpu().numpy()
 
             print(f"Raw model output shape: {signal.shape}")
@@ -37,13 +43,17 @@ class SignalGenerator:
             # Apply activation function (e.g., tanh) to bound the signal
             signal = np.tanh(signal)
 
+            # Ensure signal is an array
+            if np.isscalar(signal):
+                signal = np.full(len(df), signal)
+
             print(f"Processed signal shape: {signal.shape}")
             print(f"Processed signal range: {np.min(signal)} to {np.max(signal)}")
             print(f"Number of NaN in processed signal: {np.isnan(signal).sum()}")
             print(f"Number of inf in processed signal: {np.isinf(signal).sum()}")
 
             signals[tf] = signal
-            dynamic_weights[tf] = self.calculate_dynamic_weight(df)
+            dynamic_weights[tf] = self.calculate_dynamic_weight(features)
 
         return signals, dynamic_weights
 
@@ -51,9 +61,21 @@ class SignalGenerator:
         volatility = df['Volatility'].values
         trend_strength = df['Trend_Strength'].values
         
+        print(f"Volatility shape: {volatility.shape}")
+        print(f"Trend_Strength shape: {trend_strength.shape}")
+        
+        # If volatility is 2D, use only the first column
+        if volatility.ndim > 1:
+            volatility = volatility[:, 0]
+        
+        # Avoid division by zero
+        volatility = np.where(volatility == 0, 1e-8, volatility)
+        
         # Normalize weights
         weight = (1 / volatility) * np.abs(trend_strength)
-        weight = (weight - np.min(weight)) / (np.max(weight) - np.min(weight))
+        weight = (weight - np.min(weight)) / (np.max(weight) - np.min(weight) + 1e-8)
+        
+        print(f"Calculated weight shape: {weight.shape}")
         
         return weight
 

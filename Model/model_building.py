@@ -19,23 +19,23 @@ class MultiTimeframeLSTM(nn.Module):
         # LSTM layer
         lstm_out, _ = self.lstm(x)
         
+        # Take the last output of the LSTM sequence
+        lstm_last = lstm_out[:, -1, :]
+        
         # Ensure all tensors have the same batch size and are 2D
-        batch_size = lstm_out.size(0)
-        if volatility.dim() == 1:
-            volatility = volatility.view(batch_size, 1)
-        if accuracy.dim() == 1:
-            accuracy = accuracy.view(batch_size, 1)
-        if trend_strength.dim() == 1:
-            trend_strength = trend_strength.view(batch_size, 1)
+        batch_size = lstm_last.size(0)
+        volatility = volatility[:, -1].view(batch_size, 1)
+        accuracy = accuracy[:, -1].view(batch_size, 1)
+        trend_strength = trend_strength[:, -1].view(batch_size, 1)
         
         # Print shapes after reshaping
-        print(f"lstm_out shape: {lstm_out.shape}")
+        print(f"lstm_last shape: {lstm_last.shape}")
         print(f"volatility shape after reshape: {volatility.shape}")
         print(f"accuracy shape after reshape: {accuracy.shape}")
         print(f"trend_strength shape after reshape: {trend_strength.shape}")
 
         # Combine LSTM output with additional features
-        combined = torch.cat([lstm_out, volatility, accuracy, trend_strength], dim=1)
+        combined = torch.cat([lstm_last, volatility, accuracy, trend_strength], dim=1)
         
         # Print combined shape
         print(f"combined shape: {combined.shape}")
