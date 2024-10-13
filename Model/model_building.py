@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 class DynamicWeightModule(nn.Module):
     def __init__(self, hidden_size):
@@ -45,19 +48,42 @@ class ModelBuilder:
         self.config = config
 
     def build_model(self, featured_data):
-        sample_df = next(iter(featured_data.values()))
-        input_size = len(sample_df.columns) - 2  # -2 for 'returns' and 'log_returns'
-        print(f"Building model with input_size: {input_size}")
-        model = MultiTimeframeLSTM(
-            input_size,
-            self.config['hidden_size'],
-            self.config['num_layers'],
-            self.config['num_heads'],
-            output_size=3  # signal strength, entry level, stop loss point
-        ).to(self.config['device'])
-        return model
+        if not featured_data:
+            logger.error("No data available to build the model")
+            return None
+
+        try:
+            sample_df = next(iter(featured_data.values()))
+            if sample_df.empty:
+                logger.error("Sample DataFrame is empty")
+                return None
+
+            input_size = len(sample_df.columns) - 2  # -2 for 'returns' and 'log_returns'
+            logger.info(f"Building model with input_size: {input_size}")
+            model = MultiTimeframeLSTM(
+                input_size,
+                self.config['hidden_size'],
+                self.config['num_layers'],
+                self.config['num_heads'],
+                output_size=3  # signal strength, entry level, stop loss point
+            ).to(self.config['device'])
+            return model
+        except StopIteration:
+            logger.error("No data available in featured_data")
+            return None
+        except Exception as e:
+            logger.error(f"Error building model: {str(e)}")
+            return None
 
     def train_model(self, model, featured_data):
+        if model is None:
+            logger.error("No model to train")
+            return None
+
+        if not featured_data:
+            logger.error("No data available for training")
+            return model
+
         optimizer = optim.Adam(model.parameters(), lr=self.config['learning_rate'])
         criterion = nn.MSELoss()
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5)
@@ -82,9 +108,9 @@ class ModelBuilder:
                         total_loss += loss.item()
                         batch_count += 1
                     else:
-                        print(f"Warning: NaN or Inf loss encountered in training for timeframe {tf}")
+                        logger.warning(f"NaN or Inf loss encountered in training for timeframe {tf}")
                 except Exception as e:
-                    print(f"Error processing timeframe {tf}: {e}")
+                    logger.error(f"Error processing timeframe {tf}: {str(e)}")
 
             model.eval()
             val_loss = 0
@@ -99,9 +125,9 @@ class ModelBuilder:
                             val_loss += loss.item()
                             val_batch_count += 1
                         else:
-                            print(f"Warning: NaN or Inf loss encountered in validation for timeframe {tf}")
+                            logger.warning(f"NaN or Inf loss encountered in validation for timeframe {tf}")
                     except Exception as e:
-                        print(f"Error processing validation data for timeframe {tf}: {e}")
+                        logger.error(f"Error processing validation data for timeframe {tf}: {str(e)}")
             
             if batch_count > 0:
                 avg_train_loss = total_loss / batch_count
@@ -115,7 +141,7 @@ class ModelBuilder:
                 avg_val_loss = float('nan')
             
             if (epoch + 1) % 10 == 0:
-                print(f'Epoch [{epoch+1}/{self.config["epochs"]}], Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}')
+                logger.info(f'Epoch [{epoch+1}/{self.config["epochs"]}], Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}')
         
         return model
 
@@ -149,8 +175,12 @@ class ModelBuilder:
         return train_data, val_data
 
 def print_model_summary(model, config):
-    print(model)
-    print(f"\nModel Parameter Count: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
+    if model is None:
+        logger.error("No model to summarize")
+        return
+
+    logger.info(str(model))
+    logger.info(f"\nModel Parameter Count: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
     
     input_size = config['input_size']
     sequence_length = config['sequence_length']
@@ -162,5 +192,5 @@ def print_model_summary(model, config):
     with torch.no_grad():
         output, _ = model(dummy_input, dummy_volatility, dummy_accuracy, dummy_trend_strength)
     
-    print(f"\nInput shape: {dummy_input.shape}")
-    print(f"Output shape: {output.shape}")
+    logger.info(f"\nInput shape: {dummy_input.shape}")
+    logger.info(f"Output shape: {output.shape}")
