@@ -1,83 +1,44 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 class Backtester:
-    def __init__(self, signals, initial_capital=100000):
-        self.signals = signals
-        self.initial_capital = initial_capital
-        self.positions = self.generate_positions()
-        self.portfolio = self.backtest_portfolio()
+    def __init__(self, config):
+        self.config = config
 
-    def generate_positions(self):
-        positions = pd.DataFrame(index=self.signals.index).fillna(0.0)
-        positions['Position'] = 0
-        positions.loc[self.signals['Buy'] == 1, 'Position'] = 1
-        positions.loc[self.signals['Sell'] == 1, 'Position'] = -1
-        return positions
+    def run_backtest(self, signals, data, dynamic_weights):
+        results = {}
+        for tf in signals.keys():
+            if tf in data:
+                pnl = self.calculate_pnl(signals[tf], data[tf])
+                sharpe_ratio = self.calculate_sharpe_ratio(pnl)
+                max_drawdown = self.calculate_max_drawdown(pnl)
+                results[tf] = {
+                    'PnL': pnl.sum(),
+                    'Sharpe Ratio': sharpe_ratio,
+                    'Max Drawdown': max_drawdown
+                }
+        return results
 
-    def backtest_portfolio(self):
-        portfolio = pd.DataFrame(index=self.signals.index).fillna(0.0)
-        portfolio['Position'] = self.positions['Position']
-        portfolio['Close'] = self.signals['Close']
-        portfolio['Returns'] = portfolio['Close'].pct_change()
-        portfolio['Strategy'] = portfolio['Position'].shift(1) * portfolio['Returns']
+    def calculate_pnl(self, signal, data):
+        # Ensure the signal and data have the same length
+        min_length = min(len(signal['signal_strength']), len(data))
         
-        portfolio['Equity'] = (1 + portfolio['Strategy']).cumprod() * self.initial_capital
-        portfolio['DrawDown'] = (portfolio['Equity'] - portfolio['Equity'].cummax()) / portfolio['Equity'].cummax()
+        # Use the last min_length elements
+        position = signal['position_size'][-min_length:]
+        returns = data['returns'].iloc[-min_length:].values
         
-        # Add debugging information
-        print("Backtest Summary:")
-        print(f"Total trades: {(portfolio['Position'].diff() != 0).sum()}")
-        print(f"Profitable trades: {(portfolio['Strategy'] > 0).sum()}")
-        print(f"Unprofitable trades: {(portfolio['Strategy'] < 0).sum()}")
-        print(f"Win rate: {(portfolio['Strategy'] > 0).sum() / (portfolio['Strategy'] != 0).sum():.2%}")
-        print(f"Average profit per trade: ${portfolio['Strategy'][portfolio['Strategy'] > 0].mean():.2f}")
-        print(f"Average loss per trade: ${portfolio['Strategy'][portfolio['Strategy'] < 0].mean():.2f}")
-        
-        return portfolio
+        pnl = position * returns
+        return pd.Series(pnl)
 
-    def calculate_performance_metrics(self):
-        total_return = (self.portfolio['Equity'].iloc[-1] - self.initial_capital) / self.initial_capital
-        sharpe_ratio = np.sqrt(252) * self.portfolio['Strategy'].mean() / self.portfolio['Strategy'].std() if self.portfolio['Strategy'].std() != 0 else np.nan
-        max_drawdown = self.portfolio['DrawDown'].min()
-        
-        return {
-            'Total Return': total_return,
-            'Sharpe Ratio': sharpe_ratio,
-            'Max Drawdown': max_drawdown
-        }
+    def calculate_sharpe_ratio(self, pnl, risk_free_rate=0.02):
+        returns = pnl.pct_change().dropna()
+        excess_returns = returns - risk_free_rate / 252  # Assuming daily returns
+        sharpe_ratio = np.sqrt(252) * excess_returns.mean() / excess_returns.std()
+        return sharpe_ratio
 
-def run_backtest(signals):
-    backtester = Backtester(signals)
-    performance_metrics = backtester.calculate_performance_metrics()
-    
-    print("\nBacktest Results:")
-    for metric, value in performance_metrics.items():
-        print(f"{metric}: {value:.2f}")
-    
-    return backtester.portfolio
-
-if __name__ == "__main__":
-    # Example usage
-    dates = pd.date_range(start="2023-01-01", end="2023-12-31", freq="D")
-    close_prices = np.random.randn(len(dates)).cumsum() + 100
-    signals = pd.DataFrame({
-        'Close': close_prices,
-        'Signal': np.random.randn(len(dates)),
-        'Buy': np.random.choice([0, 1], size=len(dates), p=[0.9, 0.1]),
-        'Sell': np.random.choice([0, 1], size=len(dates), p=[0.9, 0.1])
-    }, index=dates)
-    
-    portfolio = run_backtest(signals)
-    
-    # Plot equity curve
-    import matplotlib.pyplot as plt
-    plt.figure(figsize=(12, 6))
-    plt.plot(portfolio.index, portfolio['Equity'])
-    plt.title('Equity Curve')
-    plt.xlabel('Date')
-    plt.ylabel('Equity')
-    plt.grid(True)
-    plt.savefig('equity_curve.png')
-    plt.close()
-    print("Equity curve plot saved as equity_curve.png")
+    def calculate_max_drawdown(self, pnl):
+        cumulative_returns = (1 + pnl).cumprod()
+        peak = cumulative_returns.expanding(min_periods=1).max()
+        drawdown = (cumulative_returns / peak) - 1
+        max_drawdown = drawdown.min()
+        return max_drawdown

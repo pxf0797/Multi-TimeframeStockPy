@@ -15,9 +15,26 @@ def calculate_accuracy(predictions, actual):
 
 def identify_market_regime(df, n_clusters=3):
     features = ['Volatility', 'Trend_Strength', 'Volume']
-    X = df[features].values
+    
+    # Check if all required features are present
+    missing_features = [f for f in features if f not in df.columns]
+    if missing_features:
+        raise ValueError(f"Missing features: {missing_features}")
+    
+    # Drop rows with NaN values in the required features
+    df_clean = df.dropna(subset=features)
+    
+    # Check if there's enough data after dropping NaN values
+    if len(df_clean) < n_clusters:
+        print(f"Warning: Not enough data points ({len(df_clean)}) for {n_clusters} clusters after removing NaN values.")
+        return df  # Return original DataFrame if not enough data
+    
+    X = df_clean[features].values
     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-    df['Regime'] = kmeans.fit_predict(X)
+    df_clean['Regime'] = kmeans.fit_predict(X)
+    
+    # Merge the regime back to the original DataFrame
+    df = df.join(df_clean['Regime'], how='left')
     return df
 
 def adaptive_stop_loss(entry_price, atr, risk_total, k=2):
@@ -56,8 +73,15 @@ def visualize_attention_weights(attention_weights, timeframes):
 def calculate_trend_consistency(featured_data):
     trend_signs = []
     for tf, df in featured_data.items():
+        if 'TSI' not in df.columns:
+            print(f"Warning: TSI not found in {tf} timeframe. Skipping.")
+            continue
         tsi = df['TSI'].iloc[-1]
         trend_signs.append(np.sign(tsi))
+    
+    if not trend_signs:
+        print("Warning: No valid TSI data found across timeframes.")
+        return 0
     
     trend_cons = np.prod(trend_signs)
     return trend_cons

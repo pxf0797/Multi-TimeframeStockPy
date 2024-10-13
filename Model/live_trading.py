@@ -6,7 +6,7 @@ from data_processing import DataProcessor
 from feature_engineering import FeatureEngineer
 from signal_generation import SignalGenerator
 from risk_management import RiskManager
-from utils import log_trade, implement_circuit_breaker
+from Utils.utils import log_trade, implement_circuit_breaker
 
 class LiveTrader:
     def __init__(self, config):
