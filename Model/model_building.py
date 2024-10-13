@@ -4,6 +4,9 @@ import torch.optim as optim
 import numpy as np
 
 class DynamicWeightModule(nn.Module):
+    """
+    Module for calculating dynamic weights based on LSTM outputs and additional features.
+    """
     def __init__(self, hidden_size):
         super(DynamicWeightModule, self).__init__()
         self.weight_calc = nn.Sequential(
@@ -13,11 +16,26 @@ class DynamicWeightModule(nn.Module):
         )
     
     def forward(self, lstm_outputs, volatility, accuracy, trend_strength):
+        """
+        Calculate dynamic weights.
+        
+        Args:
+            lstm_outputs (torch.Tensor): Output from LSTM layer.
+            volatility (torch.Tensor): Volatility values.
+            accuracy (torch.Tensor): Accuracy values.
+            trend_strength (torch.Tensor): Trend strength values.
+        
+        Returns:
+            torch.Tensor: Calculated dynamic weights.
+        """
         raw_weights = self.weight_calc(lstm_outputs)
         adjusted_weights = raw_weights * (1 + accuracy) * (1 + trend_strength) * volatility
         return torch.sigmoid(adjusted_weights)
 
 class MultiTimeframeLSTM(nn.Module):
+    """
+    Multi-timeframe LSTM model with attention and dynamic weighting.
+    """
     def __init__(self, input_size, hidden_size, num_layers, num_heads, output_size):
         super(MultiTimeframeLSTM, self).__init__()
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
@@ -27,6 +45,18 @@ class MultiTimeframeLSTM(nn.Module):
         self.dropout = nn.Dropout(0.2)
     
     def forward(self, x, volatility, accuracy, trend_strength):
+        """
+        Forward pass of the model.
+        
+        Args:
+            x (torch.Tensor): Input tensor.
+            volatility (torch.Tensor): Volatility values.
+            accuracy (torch.Tensor): Accuracy values.
+            trend_strength (torch.Tensor): Trend strength values.
+        
+        Returns:
+            tuple: Output tensor and dynamic weights.
+        """
         lstm_out, _ = self.lstm(x)
         
         dynamic_weights = self.dynamic_weight(lstm_out, volatility.unsqueeze(-1), accuracy.unsqueeze(-1), trend_strength.unsqueeze(-1))
@@ -42,10 +72,22 @@ class MultiTimeframeLSTM(nn.Module):
         return output, dynamic_weights
 
 class ModelBuilder:
+    """
+    Class for building and training the multi-timeframe LSTM model.
+    """
     def __init__(self, config):
         self.config = config
 
     def build_model(self, featured_data):
+        """
+        Build the model based on the input data and configuration.
+        
+        Args:
+            featured_data (dict): Dictionary of DataFrames with engineered features.
+        
+        Returns:
+            MultiTimeframeLSTM: Instantiated model.
+        """
         # Calculate input size based on actual feature count
         sample_df = next(iter(featured_data.values()))
         input_size = len(sample_df.columns) - 2  # -2 for 'returns' and 'log_returns'
@@ -60,6 +102,16 @@ class ModelBuilder:
         return model
 
     def train_model(self, model, featured_data):
+        """
+        Train the model using the provided data.
+        
+        Args:
+            model (MultiTimeframeLSTM): The model to train.
+            featured_data (dict): Dictionary of DataFrames with engineered features.
+        
+        Returns:
+            MultiTimeframeLSTM: Trained model.
+        """
         optimizer = optim.Adam(model.parameters(), lr=self.config['learning_rate'])
         criterion = nn.MSELoss()
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5)
@@ -104,6 +156,15 @@ class ModelBuilder:
         return model
 
     def prepare_data(self, df):
+        """
+        Prepare data for model input.
+        
+        Args:
+            df (pd.DataFrame): DataFrame with features.
+        
+        Returns:
+            tuple: Tensors for model input (X, y, volatility, accuracy, trend_strength).
+        """
         required_columns = ['Volatility', 'Accuracy', 'Trend_Strength', 'returns', 'ATR']
         if not all(col in df.columns for col in required_columns):
             missing_columns = [col for col in required_columns if col not in df.columns]
@@ -118,6 +179,16 @@ class ModelBuilder:
         return X, y, volatility, accuracy, trend_strength
 
     def split_data(self, data, train_ratio=0.8):
+        """
+        Split data into training and validation sets.
+        
+        Args:
+            data (dict): Dictionary of DataFrames with features.
+            train_ratio (float): Ratio of data to use for training.
+        
+        Returns:
+            tuple: Dictionaries of training and validation data.
+        """
         train_data = {}
         val_data = {}
         for tf, df in data.items():
@@ -127,6 +198,13 @@ class ModelBuilder:
         return train_data, val_data
 
 def print_model_summary(model, config):
+    """
+    Print a summary of the model architecture and output shapes.
+    
+    Args:
+        model (MultiTimeframeLSTM): The model to summarize.
+        config (dict): Configuration dictionary.
+    """
     print(model)
     print(f"\nModel Parameter Count: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
     

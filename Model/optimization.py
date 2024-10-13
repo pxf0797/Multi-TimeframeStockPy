@@ -10,6 +10,17 @@ class Optimizer:
         self.backtester = Backtester(config)
 
     def optimize(self, model, featured_data, processed_data):
+        """
+        Optimize the model's hyperparameters using scipy's minimize function.
+
+        Args:
+            model (torch.nn.Module): The initial model.
+            featured_data (dict): Dictionary of DataFrames with engineered features for each timeframe.
+            processed_data (dict): Dictionary of processed data for each timeframe.
+
+        Returns:
+            dict: Optimized hyperparameters.
+        """
         # Define the parameters to optimize
         initial_params = np.array([
             self.config['learning_rate'],
@@ -28,6 +39,16 @@ class Optimizer:
 
         # Define the objective function
         def objective(params):
+            """
+            Objective function to minimize. It rebuilds and retrains the model with new parameters,
+            then evaluates its performance using backtesting.
+
+            Args:
+                params (np.array): Array of hyperparameters to evaluate.
+
+            Returns:
+                float: Negative of the average Sharpe ratio across all timeframes.
+            """
             # Update the model with new parameters
             self.config['learning_rate'] = params[0]
             self.config['num_layers'] = int(params[2])

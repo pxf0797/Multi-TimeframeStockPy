@@ -5,9 +5,10 @@ import torch
 import pandas as pd
 import numpy as np
 
-# Add the parent directory to the Python path
+# Add the parent directory to the Python path to allow imports from other directories
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Import custom modules
 from data_processing import DataProcessor
 from feature_engineering import FeatureEngineer
 from model_building import ModelBuilder, print_model_summary
@@ -18,12 +19,13 @@ from optimization import Optimizer
 from live_trading import LiveTrader
 from Utils.utils import calculate_trend_consistency, identify_market_regime
 
-# Set up logging
+# Set up logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 def main():
     try:
+        # Configuration dictionary containing various parameters for the model and trading process
         config = {
             'asset': 'BTC-USD',
             'timeframes': ['1m', '5m', '15m', '1h', '1d', '1M'],
@@ -45,6 +47,7 @@ def main():
             'sequence_length': 100,
         }
 
+        # Initialize components
         logger.info("Initializing components...")
         data_processor = DataProcessor(config)
         feature_engineer = FeatureEngineer(config)

@@ -10,6 +10,16 @@ class SignalGenerator:
         self.config = config
 
     def generate_signals(self, model, featured_data):
+        """
+        Generate trading signals for each timeframe using the trained model.
+
+        Args:
+            model (torch.nn.Module): Trained model.
+            featured_data (dict): Dictionary of DataFrames with engineered features for each timeframe.
+
+        Returns:
+            tuple: Dictionaries of signals and dynamic weights for each timeframe.
+        """
         model.eval()
         signals = {}
         dynamic_weights = {}
@@ -27,6 +37,15 @@ class SignalGenerator:
         return signals, dynamic_weights
 
     def prepare_data(self, df):
+        """
+        Prepare data for model input.
+
+        Args:
+            df (pd.DataFrame): DataFrame with features for a single timeframe.
+
+        Returns:
+            tuple: Tensors for model input (X, volatility, accuracy, trend_strength).
+        """
         required_columns = ['Volatility', 'Accuracy', 'Trend_Strength', 'returns', 'log_returns', 'ATR']
         if not all(col in df.columns for col in required_columns):
             missing_columns = [col for col in required_columns if col not in df.columns]
@@ -40,6 +59,16 @@ class SignalGenerator:
         return X, volatility, accuracy, trend_strength
 
     def process_predictions(self, predictions, df):
+        """
+        Process model predictions to generate trading signals.
+
+        Args:
+            predictions (np.array): Model predictions.
+            df (pd.DataFrame): DataFrame with features for a single timeframe.
+
+        Returns:
+            dict: Processed trading signals.
+        """
         signal_strength = predictions[:, 0]
         entry_level = self.determine_entry_level(predictions[:, 1], df['Trend_Strength'].values)
         stop_loss = predictions[:, 2] * df['ATR'].values
@@ -55,6 +84,16 @@ class SignalGenerator:
         }
 
     def determine_entry_level(self, raw_level, trend_strength):
+        """
+        Determine entry levels based on raw model output and trend strength.
+
+        Args:
+            raw_level (np.array): Raw entry level predictions from the model.
+            trend_strength (np.array): Trend strength values.
+
+        Returns:
+            np.array: Determined entry levels.
+        """
         entry_levels = np.zeros_like(raw_level)
         entry_levels[np.logical_and(raw_level > 0.7, trend_strength > 0.05)] = 2  # Strong entry
         entry_levels[np.logical_and(np.logical_and(raw_level > 0.5, raw_level <= 0.7), trend_strength > 0.03)] = 1  # Medium entry
@@ -62,6 +101,17 @@ class SignalGenerator:
         return entry_levels
 
     def generate_comprehensive_signal(self, signals, dynamic_weights, trend_cons):
+        """
+        Generate a comprehensive signal by combining signals from all timeframes.
+
+        Args:
+            signals (dict): Dictionary of signals for each timeframe.
+            dynamic_weights (dict): Dictionary of dynamic weights for each timeframe.
+            trend_cons (float): Trend consistency value.
+
+        Returns:
+            np.array: Comprehensive signal.
+        """
         # Find the minimum length among all signals
         min_length = min(len(signals[tf]['signal_strength']) for tf in signals)
         
@@ -85,6 +135,18 @@ class SignalGenerator:
         return s_comprehensive
 
     def determine_entry_strategy(self, s_comprehensive, entry_level, tc, risk_total):
+        """
+        Determine the entry strategy based on comprehensive signal, entry level, trend consistency, and total risk.
+
+        Args:
+            s_comprehensive (np.array): Comprehensive signal.
+            entry_level (np.array): Entry levels.
+            tc (np.array): Trend consistency.
+            risk_total (np.array): Total risk.
+
+        Returns:
+            np.array: Array of determined strategies.
+        """
         th1, th2, th3 = 0.7, 0.5, 0.3
         r1, r2, r3 = 0.1, 0.2, 0.3
 
@@ -120,6 +182,15 @@ class SignalGenerator:
         return strategies
 
     def combine_timeframe_signals(self, signals):
+        """
+        Combine signals from different timeframes into a single signal.
+
+        Args:
+            signals (dict): Dictionary of signals for each timeframe.
+
+        Returns:
+            dict: Combined signal.
+        """
         combined_signal = {
             'signal_strength': 0,
             'entry_level': 0,

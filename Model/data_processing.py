@@ -8,12 +8,19 @@ class DataProcessor:
         self.config = config
 
     def load_data(self):
+        """
+        Download financial data for specified timeframes using yfinance.
+        
+        Returns:
+            dict: Dictionary of DataFrames for each timeframe.
+        """
         data = {}
         end_date = datetime.now()
         
         for tf in self.config['timeframes']:
             print(f"Downloading data for timeframe: {tf}")
             
+            # Set start date based on timeframe
             if tf == '1m':
                 start_date = end_date - timedelta(days=7)
             elif tf in ['5m', '15m']:
@@ -36,6 +43,15 @@ class DataProcessor:
         return data
 
     def process_data(self, data):
+        """
+        Process downloaded data by calculating returns, log returns, and volatility.
+        
+        Args:
+            data (dict): Dictionary of DataFrames for each timeframe.
+        
+        Returns:
+            dict: Dictionary of processed DataFrames for each timeframe.
+        """
         processed_data = {}
         for tf, df in data.items():
             if df.empty:
@@ -60,6 +76,15 @@ class DataProcessor:
         return processed_data
 
     def clean_data(self, df):
+        """
+        Clean data by removing outliers and handling missing values.
+        
+        Args:
+            df (pd.DataFrame): Input DataFrame.
+        
+        Returns:
+            pd.DataFrame: Cleaned DataFrame.
+        """
         # Remove outliers
         for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
             df[col] = df[col].clip(lower=df[col].quantile(0.01), upper=df[col].quantile(0.99))
@@ -70,6 +95,15 @@ class DataProcessor:
         return df
 
     def pad_sequence(self, df):
+        """
+        Pad or truncate the DataFrame to the specified sequence length.
+        
+        Args:
+            df (pd.DataFrame): Input DataFrame.
+        
+        Returns:
+            pd.DataFrame: Padded or truncated DataFrame.
+        """
         seq_length = self.config['sequence_length']
         if len(df) > seq_length:
             return df.iloc[-seq_length:]
@@ -81,6 +115,15 @@ class DataProcessor:
             return df
 
     def align_timeframes(self, data):
+        """
+        Align data from different timeframes to a common index.
+        
+        Args:
+            data (dict): Dictionary of DataFrames for each timeframe.
+        
+        Returns:
+            dict: Dictionary of aligned DataFrames for each timeframe.
+        """
         aligned_data = {}
         base_tf = max(data.keys(), key=lambda x: len(data[x]))  # Use the timeframe with most data as base
         base_index = data[base_tf].index
