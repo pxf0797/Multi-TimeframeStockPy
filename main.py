@@ -51,11 +51,8 @@ def load_config():
     }
     return config
 
-def process_data(config):
-    data_processor = DataProcessor(config)
-    feature_engineer = FeatureEngineer(config)
-
-    logger.info("Loading and processing data...")
+def acquire_data(config):
+    logger.info("Starting data acquisition process...")
     
     # Set date range
     end_date = datetime.now().strftime('%Y-%m-%d')
@@ -67,7 +64,6 @@ def process_data(config):
     try:
         # Fetch and align data
         data_acquisition.fetch_data(start_date, end_date)
-        data_acquisition.generate_synthetic_data()
         data_acquisition.align_data()
         
         raw_data = {tf: data_acquisition.get_data(tf) for tf in config['timeframes']}
@@ -79,7 +75,24 @@ def process_data(config):
         if all(len(df) < config['sequence_length'] for df in raw_data.values()):
             logger.warning(f"All timeframes have less than {config['sequence_length']} data points. "
                            f"This may affect the model's performance.")
+            logger.info("Generating synthetic data to supplement insufficient data...")
+            for tf in config['timeframes']:
+                if len(raw_data[tf]) < config['sequence_length']:
+                    raw_data[tf] = data_acquisition.generate_synthetic_data(tf, start_date, end_date, raw_data[tf])
         
+        logger.info("Data acquisition completed successfully.")
+        return raw_data
+    except Exception as e:
+        logger.error(f"Error in data acquisition: {str(e)}")
+        return None
+
+def process_data(config, raw_data):
+    data_processor = DataProcessor(config)
+    feature_engineer = FeatureEngineer(config)
+
+    logger.info("Processing and engineering features...")
+    
+    try:
         processed_data = data_processor.process_data(raw_data)
         
         # Log the shape of processed data for each timeframe
@@ -184,7 +197,7 @@ def model_to_flat_params(model):
 
 def main():
     parser = argparse.ArgumentParser(description="Multi-timeframe stock trading system")
-    parser.add_argument('--mode', choices=['train', 'backtest', 'optimize', 'live'], required=True, help="Operation mode")
+    parser.add_argument('--mode', choices=['acquire_data', 'train', 'backtest', 'optimize', 'live', 'full_cycle'], required=True, help="Operation mode")
     parser.add_argument('--continue_training', action='store_true', help="Continue training from saved parameters")
     args = parser.parse_args()
 
@@ -192,29 +205,44 @@ def main():
     config['signal_generator'] = SignalGenerator(config)  # Add signal_generator to config
 
     try:
-        processed_data, featured_data = process_data(config)
+        if args.mode == 'acquire_data' or args.mode == 'full_cycle':
+            raw_data = acquire_data(config)
+            if raw_data is None:
+                logger.error("Data acquisition failed. Exiting.")
+                return
+            
+            processed_data, featured_data = process_data(config, raw_data)
+            if not featured_data:
+                logger.error("Data processing failed. Exiting.")
+                return
+        
+        if args.mode == 'full_cycle' or args.mode in ['train', 'backtest', 'optimize', 'live']:
+            if 'processed_data' not in locals() or 'featured_data' not in locals():
+                logger.info("Loading previously acquired data...")
+                # Here you would load the previously acquired and processed data
+                # For now, we'll just call acquire_data and process_data again
+                raw_data = acquire_data(config)
+                processed_data, featured_data = process_data(config, raw_data)
 
-        if not featured_data:
-            logger.error("No valid data available for any timeframe. Exiting.")
-            return
+            if args.mode == 'train' or args.mode == 'full_cycle':
+                trained_model = train_model(config, featured_data, args.continue_training)
+            else:
+                model_builder = ModelBuilder(config)
+                trained_model = model_builder.build_model(featured_data)
+                trained_model.load_state_dict(torch.load(config['model_save_path'], map_location=config['device']))
 
-        if args.mode == 'train' or args.continue_training:
-            trained_model = train_model(config, featured_data, args.continue_training)
-        else:
-            model_builder = ModelBuilder(config)
-            trained_model = model_builder.build_model(featured_data)
-            trained_model.load_state_dict(torch.load(config['model_save_path'], map_location=config['device']))
+            signals, dynamic_weights, s_comprehensive, trend_cons = generate_signals(config, trained_model, featured_data)
+            managed_signals, entry_strategy = manage_risk(config, signals, processed_data, s_comprehensive, trend_cons)
 
-        signals, dynamic_weights, s_comprehensive, trend_cons = generate_signals(config, trained_model, featured_data)
-        managed_signals, entry_strategy = manage_risk(config, signals, processed_data, s_comprehensive, trend_cons)
-
-        if args.mode == 'backtest':
-            run_backtest(config, managed_signals, processed_data, dynamic_weights)
-        elif args.mode == 'optimize':
-            optimize_parameters(config, trained_model, featured_data, processed_data)
-        elif args.mode == 'live':
-            flat_params = model_to_flat_params(trained_model)
-            start_live_trading(config, trained_model, flat_params)
+            if args.mode == 'backtest' or args.mode == 'full_cycle':
+                run_backtest(config, managed_signals, processed_data, dynamic_weights)
+            
+            if args.mode == 'optimize' or args.mode == 'full_cycle':
+                optimize_parameters(config, trained_model, featured_data, processed_data)
+            
+            if args.mode == 'live' or args.mode == 'full_cycle':
+                flat_params = model_to_flat_params(trained_model)
+                start_live_trading(config, trained_model, flat_params)
 
         logger.info("Multi-timeframe stock trading process completed successfully.")
 
