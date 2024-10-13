@@ -1,81 +1,105 @@
 import numpy as np
-import pandas as pd
+from Utils.utils import calculate_sharpe_ratio, calculate_max_drawdown
 
 class RiskManager:
     def __init__(self, config):
         self.config = config
+        self.risk_per_trade = config['risk_per_trade']
+        self.max_position_size = config['max_position_size']
+        self.stop_loss = config['stop_loss']
+        self.take_profit = config['take_profit']
+        self.max_daily_loss = config['max_daily_loss']
 
-    def calculate_total_risk(self, data):
-        """
-        Calculate the total risk across all timeframes.
-        
-        Args:
-            data (dict): Dictionary of processed data for each timeframe.
-        
-        Returns:
-            float: Total risk value.
-        """
-        # TODO: Implement a more sophisticated risk calculation logic
-        # For simplicity, this method currently returns a constant risk value
-        return 0.05
+    def calculate_position_sizes(self, signals, dynamic_weights):
+        position_sizes = {}
+        for tf, signal in signals.items():
+            weight = dynamic_weights[tf]
+            position_size = self.risk_per_trade * weight * signal
+            position_size = np.clip(position_size, -self.max_position_size, self.max_position_size)
+            position_sizes[tf] = position_size
+        return position_sizes
 
     def apply_risk_management(self, signals, processed_data):
-        """
-        Apply risk management to the generated signals.
-        
-        Args:
-            signals (dict): Dictionary of signals for each timeframe.
-            processed_data (dict): Dictionary of processed data for each timeframe.
-        
-        Returns:
-            dict: Dictionary of risk-adjusted signals for each timeframe.
-        """
         managed_signals = {}
         for tf, signal in signals.items():
-            if tf in processed_data:
-                risk = self.calculate_risk(processed_data[tf])
-                managed_signals[tf] = self.adjust_signal_by_risk(signal, risk)
-            else:
-                managed_signals[tf] = signal  # Keep the original signal if no corresponding processed data
+            managed_signal = {
+                'position_size': self.calculate_position_sizes({tf: signal}, {tf: 1})[tf],
+                'entry_level': processed_data[tf]['close'].iloc[-1],
+                'stop_loss': self.calculate_stop_loss(signal, processed_data[tf]),
+                'take_profit': self.calculate_take_profit(signal, processed_data[tf])
+            }
+            managed_signals[tf] = managed_signal
         return managed_signals
 
-    def calculate_risk(self, data):
-        """
-        Calculate risk based on the data for a single timeframe.
-        
-        Args:
-            data (pd.DataFrame): Processed data for a single timeframe.
-        
-        Returns:
-            pd.Series: Normalized risk values.
-        """
-        # Use volatility as a proxy for risk
-        volatility = data['Volatility'].iloc[-len(data):]  # Use the last n values where n is the length of the data
-        return volatility / volatility.max()  # Normalize risk to be between 0 and 1
+    def calculate_stop_loss(self, signal, data):
+        current_price = data['close'].iloc[-1]
+        if signal > 0:
+            return current_price * (1 - self.stop_loss)
+        elif signal < 0:
+            return current_price * (1 + self.stop_loss)
+        else:
+            return None
 
-    def adjust_signal_by_risk(self, signal, risk):
-        """
-        Adjust trading signals based on calculated risk.
+    def calculate_take_profit(self, signal, data):
+        current_price = data['close'].iloc[-1]
+        if signal > 0:
+            return current_price * (1 + self.take_profit)
+        elif signal < 0:
+            return current_price * (1 - self.take_profit)
+        else:
+            return None
+
+    def implement_risk_limits(self, current_loss, max_daily_loss):
+        return current_loss >= max_daily_loss
+
+    def evaluate_risk_metrics(self, returns, trades):
+        sharpe_ratio = calculate_sharpe_ratio(returns)
+        max_drawdown = calculate_max_drawdown(returns.cumsum())
         
-        Args:
-            signal (dict): Original trading signals.
-            risk (pd.Series): Calculated risk values.
+        return {
+            'sharpe_ratio': sharpe_ratio,
+            'max_drawdown': max_drawdown,
+            'risk_adjusted_return': sharpe_ratio / (1 + abs(max_drawdown))
+        }
+
+    def adjust_risk_parameters(self, risk_metrics):
+        # This is a placeholder for a more sophisticated risk adjustment method
+        if risk_metrics['sharpe_ratio'] < 0.5:
+            self.risk_per_trade *= 0.9
+        elif risk_metrics['max_drawdown'] > 0.2:
+            self.max_position_size *= 0.9
         
-        Returns:
-            dict: Risk-adjusted trading signals.
-        """
-        adjusted_signal = signal.copy()
+        self.risk_per_trade = max(self.risk_per_trade, 0.001)
+        self.max_position_size = max(self.max_position_size, 0.01)
+
+    def calculate_value_at_risk(self, returns, confidence_level=0.95):
+        sorted_returns = np.sort(returns)
+        index = int((1 - confidence_level) * len(sorted_returns))
+        return abs(sorted_returns[index])
+
+    def calculate_expected_shortfall(self, returns, confidence_level=0.95):
+        var = self.calculate_value_at_risk(returns, confidence_level)
+        return abs(returns[returns <= -var].mean())
+
+    def stress_test(self, model, data, num_scenarios=1000):
+        stress_results = []
+        for _ in range(num_scenarios):
+            stressed_data = self.generate_stress_scenario(data)
+            signals, _ = model.generate_signals(stressed_data)
+            performance = self.simulate_performance(signals, stressed_data)
+            stress_results.append(performance)
         
-        # Ensure risk has the same length as the signal
-        risk = risk.iloc[-len(signal['signal_strength']):]
-        
-        # Adjust signal strength based on risk
-        adjusted_signal['signal_strength'] *= (1 - risk)
-        
-        # Adjust entry level based on risk (e.g., more conservative entry for higher risk)
-        adjusted_signal['entry_level'] *= (1 + risk)
-        
-        # Adjust stop loss based on risk (e.g., tighter stop loss for higher risk)
-        adjusted_signal['stop_loss'] *= (1 - risk)
-        
-        return adjusted_signal
+        return {
+            'worst_case_loss': min(stress_results),
+            'average_stress_performance': np.mean(stress_results),
+            '5th_percentile_performance': np.percentile(stress_results, 5)
+        }
+
+    def generate_stress_scenario(self, data):
+        # This is a placeholder for a more sophisticated stress scenario generation
+        stress_factor = np.random.uniform(0.8, 1.2, size=len(data))
+        return data * stress_factor
+
+    def simulate_performance(self, signals, data):
+        # This is a placeholder for a more sophisticated performance simulation
+        return np.sum(signals * data['returns'])

@@ -2,12 +2,11 @@ import torch
 import torch.nn as nn
 
 class MultiTimeframeLSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, num_heads, output_size):
+    def __init__(self, input_size, hidden_size, num_layers, output_size):
         super(MultiTimeframeLSTM, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
-        self.attention = nn.MultiheadAttention(hidden_size, num_heads, batch_first=True)
         self.fc = nn.Linear(hidden_size + 3, output_size)  # +3 for volatility, accuracy, trend_strength
         
     def forward(self, x, volatility, accuracy, trend_strength):
@@ -20,26 +19,23 @@ class MultiTimeframeLSTM(nn.Module):
         # LSTM layer
         lstm_out, _ = self.lstm(x)
         
-        # Self-attention layer
-        attn_out, _ = self.attention(lstm_out, lstm_out, lstm_out)
-        
-        # Use the mean of the attention output across the time dimension
-        attn_mean = torch.mean(attn_out, dim=1)
-        
         # Ensure all tensors have the same batch size and are 2D
-        batch_size = attn_mean.size(0)
-        volatility = volatility.view(batch_size, 1)
-        accuracy = accuracy.view(batch_size, 1)
-        trend_strength = trend_strength.view(batch_size, 1)
+        batch_size = lstm_out.size(0)
+        if volatility.dim() == 1:
+            volatility = volatility.view(batch_size, 1)
+        if accuracy.dim() == 1:
+            accuracy = accuracy.view(batch_size, 1)
+        if trend_strength.dim() == 1:
+            trend_strength = trend_strength.view(batch_size, 1)
         
         # Print shapes after reshaping
-        print(f"attn_mean shape: {attn_mean.shape}")
+        print(f"lstm_out shape: {lstm_out.shape}")
         print(f"volatility shape after reshape: {volatility.shape}")
         print(f"accuracy shape after reshape: {accuracy.shape}")
         print(f"trend_strength shape after reshape: {trend_strength.shape}")
 
-        # Combine attention output with additional features
-        combined = torch.cat([attn_mean, volatility, accuracy, trend_strength], dim=1)
+        # Combine LSTM output with additional features
+        combined = torch.cat([lstm_out, volatility, accuracy, trend_strength], dim=1)
         
         # Print combined shape
         print(f"combined shape: {combined.shape}")
@@ -52,10 +48,9 @@ def build_model(config):
     input_size = config['input_size']
     hidden_size = config['hidden_size']
     num_layers = config['num_layers']
-    num_heads = config['num_heads']
     output_size = config['output_size']
     
-    model = MultiTimeframeLSTM(input_size, hidden_size, num_layers, num_heads, output_size)
+    model = MultiTimeframeLSTM(input_size, hidden_size, num_layers, output_size)
     print(f"Model structure: {model}")
     return model
 

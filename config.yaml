@@ -1,8 +1,8 @@
 # General Configuration
-mode: 'optimize'  # Can be 'train', 'backtest', or 'optimize'
+mode: 'train'  # Can be 'train', 'backtest', 'optimize', or 'live_trading'
 
 # Data Configuration
-asset: 'BTC-USD'
+asset: 'BTC/USD'
 timeframes: ['5m', '15m', '1h', '1d']
 sequence_length: 100
 
@@ -18,6 +18,7 @@ num_epochs: 100
 
 # Training Configuration
 model_save_path: 'model_params.pth'
+model_state_path: 'model_state.pth'
 device: 'cpu'  # Change to 'cuda' if GPU is available
 
 # Optimization Configuration
@@ -32,3 +33,17 @@ max_position_size: 0.1
 
 # Risk Management
 risk_per_trade: 0.01
+max_daily_loss: 0.05
+circuit_breaker_threshold: 0.1
+circuit_breaker_pause_time: 3600  # in seconds
+
+# Live Trading Configuration
+exchange: 'binance'  # Use the appropriate exchange name from ccxt
+api_key: 'your_api_key_here'
+api_secret: 'your_api_secret_here'
+trading_interval: 300  # in seconds
+trade_log_file: 'trade_log.csv'
+
+# Logging Configuration
+log_level: 'INFO'
+log_file: 'trading_log.txt'

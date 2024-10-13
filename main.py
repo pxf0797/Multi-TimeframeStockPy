@@ -11,7 +11,8 @@ from Model.signal_generation import SignalGenerator
 from Model.risk_management import RiskManager
 from Model.backtesting import Backtester
 from Model.optimization import Optimizer
-from Utils.utils import load_config, prepare_data_for_training
+from Model.live_trading import LiveTrader
+from Utils.utils import load_config, prepare_data_for_training, setup_logging
 
 def process_data(config):
     data_processor = DataProcessor(config)
@@ -48,43 +49,57 @@ def optimize_parameters(config, featured_data):
 
 def main():
     config = load_config()
+    logger = setup_logging(config)
     
-    processed_data, featured_data = process_data(config)
-    
-    if config['mode'] == 'train':
-        # Prepare data for training
-        train_data, val_data = prepare_data_for_training(featured_data, config)
-        train_loader = DataLoader(train_data, batch_size=config['batch_size'], shuffle=True)
-        val_loader = DataLoader(val_data, batch_size=config['batch_size'])
+    try:
+        processed_data, featured_data = process_data(config)
         
-        # Build and train model
-        model = build_model(config)
-        criterion = nn.MSELoss()
-        optimizer = optim.Adam(model.parameters(), lr=config['learning_rate'])
-        trained_model = train_model(model, train_loader, val_loader, criterion, optimizer, config['num_epochs'], config['device'])
+        if config['mode'] == 'train':
+            train_data, val_data = prepare_data_for_training(featured_data, config)
+            train_loader = DataLoader(train_data, batch_size=config['batch_size'], shuffle=True)
+            val_loader = DataLoader(val_data, batch_size=config['batch_size'])
+            
+            model = build_model(config)
+            criterion = nn.MSELoss()
+            optimizer = optim.Adam(model.parameters(), lr=config['learning_rate'])
+            trained_model = train_model(model, train_loader, val_loader, criterion, optimizer, config['num_epochs'], config['device'])
+            
+            torch.save(trained_model.state_dict(), config['model_save_path'])
+            logger.info("Model training completed and saved.")
         
-        # Save the trained model
-        torch.save(trained_model.state_dict(), config['model_save_path'])
-        print("Model training completed and saved.")
-    
-    elif config['mode'] == 'backtest':
-        model = build_model(config)
-        model.load_state_dict(torch.load(config['model_save_path'], map_location=config['device']))
-        model.eval()
+        elif config['mode'] == 'backtest':
+            model = build_model(config)
+            model.load_state_dict(torch.load(config['model_save_path'], map_location=config['device']))
+            model.eval()
+            
+            signals, dynamic_weights, s_comprehensive, trend_cons = generate_signals(config, model, featured_data)
+            position_sizes = manage_risk(config, signals, dynamic_weights)
+            results, overall_performance = run_backtest(config, signals, dynamic_weights, featured_data)
+            
+            logger.info(f"Backtest Results: {results}")
+            logger.info(f"Overall Performance: {overall_performance}")
         
-        signals, dynamic_weights, s_comprehensive, trend_cons = generate_signals(config, model, featured_data)
-        position_sizes = manage_risk(config, signals, dynamic_weights)
-        results, overall_performance = run_backtest(config, signals, dynamic_weights, featured_data)
+        elif config['mode'] == 'optimize':
+            best_params = optimize_parameters(config, featured_data)
+            logger.info(f"Optimized Parameters: {best_params}")
         
-        print("Backtest Results:", results)
-        print("Overall Performance:", overall_performance)
+        elif config['mode'] == 'live_trading':
+            model = build_model(config)
+            model.load_state_dict(torch.load(config['model_save_path'], map_location=config['device']))
+            model.eval()
+            
+            try:
+                live_trader = LiveTrader(config, model)
+                optimized_params = optimize_parameters(config, featured_data)
+                live_trader.start_trading(optimized_params)
+            except Exception as e:
+                logger.error(f"Error initializing or running LiveTrader: {str(e)}", exc_info=True)
+        
+        else:
+            logger.error("Invalid mode specified in config.")
     
-    elif config['mode'] == 'optimize':
-        best_params = optimize_parameters(config, featured_data)
-        print("Optimized Parameters:", best_params)
-    
-    else:
-        print("Invalid mode specified in config.")
+    except Exception as e:
+        logger.error(f"An error occurred: {str(e)}", exc_info=True)
 
 if __name__ == "__main__":
     main()
