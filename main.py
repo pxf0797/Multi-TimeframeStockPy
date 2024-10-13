@@ -112,6 +112,9 @@ def start_live_trading(config, model, optimized_params):
     logger.info("Starting live trading simulation...")
     live_trader.start_trading(model, optimized_params)
 
+def model_to_flat_params(model):
+    return torch.cat([p.data.view(-1) for p in model.parameters()]).cpu().numpy()
+
 def main():
     parser = argparse.ArgumentParser(description="Multi-timeframe stock trading system")
     parser.add_argument('--mode', choices=['train', 'backtest', 'optimize', 'live'], required=True, help="Operation mode")
@@ -139,7 +142,8 @@ def main():
         elif args.mode == 'optimize':
             optimize_parameters(config, trained_model, featured_data, processed_data)
         elif args.mode == 'live':
-            start_live_trading(config, trained_model, config)  # Using config as optimized_params for now
+            flat_params = model_to_flat_params(trained_model)
+            start_live_trading(config, trained_model, flat_params)
 
         logger.info("Multi-timeframe stock trading process completed successfully.")
 
