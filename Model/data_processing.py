@@ -2,25 +2,22 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta
+import time
+from Utils.utils import handle_nan_inf
 
 class DataProcessor:
     def __init__(self, config):
         self.config = config
 
     def load_data(self):
-        """
-        Download financial data for specified timeframes using yfinance.
-        
-        Returns:
-            dict: Dictionary of DataFrames for each timeframe.
-        """
         data = {}
         end_date = datetime.now()
-        
+        max_retries = 5
+        retry_delay = 5  # seconds
+
         for tf in self.config['timeframes']:
             print(f"Downloading data for timeframe: {tf}")
             
-            # Set start date based on timeframe
             if tf == '1m':
                 start_date = end_date - timedelta(days=7)
             elif tf in ['5m', '15m']:
@@ -28,30 +25,33 @@ class DataProcessor:
             else:
                 start_date = end_date - timedelta(days=730)  # 2 years
             
-            try:
-                df = yf.download(self.config['asset'], start=start_date, end=end_date, interval=tf)
-                if df.empty:
-                    print(f"Warning: Empty DataFrame for timeframe {tf}")
-                else:
-                    print(f"Downloaded {len(df)} rows for timeframe {tf}")
-                    # Convert index to UTC
-                    df.index = df.index.tz_localize('UTC')
-                    data[tf] = df
-            except Exception as e:
-                print(f"Error downloading data for timeframe {tf}: {e}")
+            for attempt in range(max_retries):
+                try:
+                    df = yf.download(self.config['asset'], start=start_date, end=end_date, interval=tf)
+                    if df.empty:
+                        print(f"Warning: Empty DataFrame for timeframe {tf}")
+                    else:
+                        print(f"Downloaded {len(df)} rows for timeframe {tf}")
+                        if df.index.tz is not None:
+                            df.index = df.index.tz_convert('UTC')
+                        else:
+                            df.index = df.index.tz_localize('UTC', nonexistent='shift_forward')
+                        data[tf] = df
+                    break
+                except Exception as e:
+                    print(f"Error downloading data for timeframe {tf} (Attempt {attempt + 1}/{max_retries}): {e}")
+                    if attempt < max_retries - 1:
+                        print(f"Retrying in {retry_delay} seconds...")
+                        time.sleep(retry_delay)
+                    else:
+                        print(f"Failed to download data for timeframe {tf} after {max_retries} attempts")
+        
+        if not data:
+            raise ValueError("No data could be downloaded for any timeframe")
         
         return data
 
     def process_data(self, data):
-        """
-        Process downloaded data by calculating returns, log returns, and volatility.
-        
-        Args:
-            data (dict): Dictionary of DataFrames for each timeframe.
-        
-        Returns:
-            dict: Dictionary of processed DataFrames for each timeframe.
-        """
         processed_data = {}
         for tf, df in data.items():
             if df.empty:
@@ -64,46 +64,27 @@ class DataProcessor:
             df = self.clean_data(df)
             df.dropna(inplace=True)
             
-            # Pad or truncate the sequence to the specified length
             df = self.pad_sequence(df)
             
             processed_data[tf] = df
             print(f"Processed {len(df)} rows for timeframe {tf}")
         
-        # Align timeframes
+        if not processed_data:
+            raise ValueError("No data could be processed for any timeframe")
+        
         processed_data = self.align_timeframes(processed_data)
         
         return processed_data
 
     def clean_data(self, df):
-        """
-        Clean data by removing outliers and handling missing values.
-        
-        Args:
-            df (pd.DataFrame): Input DataFrame.
-        
-        Returns:
-            pd.DataFrame: Cleaned DataFrame.
-        """
-        # Remove outliers
         for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
             df[col] = df[col].clip(lower=df[col].quantile(0.01), upper=df[col].quantile(0.99))
         
-        # Handle missing values
-        df.interpolate(method='time', inplace=True)
+        df = handle_nan_inf(df)
         
         return df
 
     def pad_sequence(self, df):
-        """
-        Pad or truncate the DataFrame to the specified sequence length.
-        
-        Args:
-            df (pd.DataFrame): Input DataFrame.
-        
-        Returns:
-            pd.DataFrame: Padded or truncated DataFrame.
-        """
         seq_length = self.config['sequence_length']
         if len(df) > seq_length:
             return df.iloc[-seq_length:]
@@ -115,23 +96,16 @@ class DataProcessor:
             return df
 
     def align_timeframes(self, data):
-        """
-        Align data from different timeframes to a common index.
+        if not data:
+            raise ValueError("No data to align")
         
-        Args:
-            data (dict): Dictionary of DataFrames for each timeframe.
-        
-        Returns:
-            dict: Dictionary of aligned DataFrames for each timeframe.
-        """
         aligned_data = {}
-        base_tf = max(data.keys(), key=lambda x: len(data[x]))  # Use the timeframe with most data as base
+        base_tf = max(data.keys(), key=lambda x: len(data[x]))
         base_index = data[base_tf].index
 
         for tf, df in data.items():
-            # Ensure all indexes are in UTC
             if df.index.tz is None:
-                df.index = df.index.tz_localize('UTC')
+                df.index = df.index.tz_localize('UTC', nonexistent='shift_forward')
             elif df.index.tz != 'UTC':
                 df.index = df.index.tz_convert('UTC')
             

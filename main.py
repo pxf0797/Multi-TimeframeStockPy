@@ -67,7 +67,7 @@ def train_model(config, featured_data, continue_training=False):
 
     if continue_training and os.path.exists(config['model_save_path']):
         logger.info("Loading existing model parameters...")
-        model.load_state_dict(torch.load(config['model_save_path']))
+        model.load_state_dict(torch.load(config['model_save_path'], map_location=config['device']))
 
     logger.info("Training model...")
     trained_model = model_builder.train_model(model, featured_data)
@@ -119,6 +119,7 @@ def main():
     args = parser.parse_args()
 
     config = load_config()
+    config['signal_generator'] = SignalGenerator(config)  # Add signal_generator to config
 
     try:
         processed_data, featured_data = process_data(config)
@@ -128,7 +129,7 @@ def main():
         else:
             model_builder = ModelBuilder(config)
             trained_model = model_builder.build_model(featured_data)
-            trained_model.load_state_dict(torch.load(config['model_save_path']))
+            trained_model.load_state_dict(torch.load(config['model_save_path'], map_location=config['device']))
 
         signals, dynamic_weights, s_comprehensive, trend_cons = generate_signals(config, trained_model, featured_data)
         managed_signals, entry_strategy = manage_risk(config, signals, processed_data, s_comprehensive, trend_cons)

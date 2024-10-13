@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from ta_wrapper import ta
+from Utils.utils import handle_nan_inf
 
 class FeatureEngineer:
     def __init__(self, config):
@@ -35,6 +36,7 @@ class FeatureEngineer:
                 df = self.calculate_volume_indicators(df)
                 df = self.calculate_wave_trend(df)
                 df = self.calculate_accuracy(df)
+                df = handle_nan_inf(df)  # Handle NaN and Inf values
                 df = self.maintain_sequence_length(df)
                 featured_data[tf] = df
                 print(f"Engineered features shape: {df.shape}")
@@ -218,3 +220,18 @@ class FeatureEngineer:
             return pd.concat([pad_df, df]).reset_index(drop=True)
         else:
             return df
+
+    def normalize_features(self, df):
+        """
+        Normalize features using min-max scaling.
+        
+        Args:
+            df (pd.DataFrame): Input DataFrame.
+        
+        Returns:
+            pd.DataFrame: DataFrame with normalized features.
+        """
+        for column in df.columns:
+            if column not in ['Open', 'High', 'Low', 'Close', 'Volume']:
+                df[column] = (df[column] - df[column].min()) / (df[column].max() - df[column].min())
+        return df

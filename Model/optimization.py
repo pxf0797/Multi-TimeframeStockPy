@@ -10,17 +10,6 @@ class Optimizer:
         self.backtester = Backtester(config)
 
     def optimize(self, model, featured_data, processed_data):
-        """
-        Optimize the model's hyperparameters using scipy's minimize function.
-
-        Args:
-            model (torch.nn.Module): The initial model.
-            featured_data (dict): Dictionary of DataFrames with engineered features for each timeframe.
-            processed_data (dict): Dictionary of processed data for each timeframe.
-
-        Returns:
-            dict: Optimized hyperparameters.
-        """
         # Define the parameters to optimize
         initial_params = np.array([
             self.config['learning_rate'],
@@ -39,43 +28,41 @@ class Optimizer:
 
         # Define the objective function
         def objective(params):
-            """
-            Objective function to minimize. It rebuilds and retrains the model with new parameters,
-            then evaluates its performance using backtesting.
+            # Check for NaN values in params
+            if np.isnan(params).any():
+                return 1e10  # Return a large error value
 
-            Args:
-                params (np.array): Array of hyperparameters to evaluate.
+            try:
+                # Update the model with new parameters
+                self.config['learning_rate'] = params[0]
+                self.config['num_layers'] = max(1, min(5, int(params[2])))  # Ensure it's an integer between 1 and 5
+                self.config['num_heads'] = max(1, min(8, int(params[3])))   # Ensure it's an integer between 1 and 8
+                
+                # Ensure hidden_size is divisible by num_heads
+                self.config['hidden_size'] = max(32, int(params[1] - (params[1] % self.config['num_heads'])))
+                
+                # Ensure hidden_size is at least num_heads
+                self.config['hidden_size'] = max(self.config['hidden_size'], self.config['num_heads'])
 
-            Returns:
-                float: Negative of the average Sharpe ratio across all timeframes.
-            """
-            # Update the model with new parameters
-            self.config['learning_rate'] = params[0]
-            self.config['num_layers'] = int(params[2])
-            self.config['num_heads'] = int(params[3])
-            
-            # Ensure hidden_size is divisible by num_heads
-            self.config['hidden_size'] = int(params[1] - (params[1] % self.config['num_heads']))
-            
-            # Ensure hidden_size is at least num_heads
-            self.config['hidden_size'] = max(self.config['hidden_size'], self.config['num_heads'])
+                # Rebuild and retrain the model with new parameters
+                new_model = self.model_builder.build_model(featured_data)
+                trained_model = self.model_builder.train_model(new_model, featured_data)
 
-            # Rebuild and retrain the model with new parameters
-            new_model = self.model_builder.build_model(featured_data)
-            trained_model = self.model_builder.train_model(new_model, featured_data)
+                # Generate signals using the trained model
+                signal_generator = self.config['signal_generator']
+                signals, dynamic_weights = signal_generator.generate_signals(trained_model, featured_data)
 
-            # Generate signals using the trained model
-            signal_generator = self.config['signal_generator']
-            signals, dynamic_weights = signal_generator.generate_signals(trained_model, featured_data)
+                # Run backtesting
+                backtest_results = self.backtester.run_backtest(signals, processed_data, dynamic_weights)
 
-            # Run backtesting
-            backtest_results = self.backtester.run_backtest(signals, processed_data, dynamic_weights)
+                # Use the average Sharpe ratio across all timeframes as the evaluation metric
+                evaluation_metric = np.mean([result['Sharpe Ratio'] for result in backtest_results.values()])
 
-            # Use the average Sharpe ratio across all timeframes as the evaluation metric
-            evaluation_metric = np.mean([result['Sharpe Ratio'] for result in backtest_results.values()])
-
-            # Return the negative of the evaluation metric (we want to maximize it)
-            return -evaluation_metric
+                # Return the negative of the evaluation metric (we want to maximize it)
+                return -evaluation_metric if not np.isnan(evaluation_metric) else 1e10
+            except Exception as e:
+                print(f"Error in objective function: {e}")
+                return 1e10  # Return a large error value
 
         # Run the optimization
         result = minimize(objective, initial_params, method='L-BFGS-B', bounds=bounds)
@@ -83,9 +70,9 @@ class Optimizer:
         # Return the optimized parameters
         optimized_params = {
             'learning_rate': result.x[0],
-            'hidden_size': int(result.x[1] - (result.x[1] % int(result.x[3]))),  # Ensure divisibility
-            'num_layers': int(result.x[2]),
-            'num_heads': int(result.x[3])
+            'hidden_size': max(32, int(result.x[1] - (result.x[1] % max(1, min(8, int(result.x[3])))))),
+            'num_layers': max(1, min(5, int(result.x[2]))),
+            'num_heads': max(1, min(8, int(result.x[3])))
         }
 
         # Ensure hidden_size is at least num_heads
