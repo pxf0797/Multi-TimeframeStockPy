@@ -4,6 +4,9 @@ import yfinance as yf
 from datetime import datetime, timedelta
 import time
 from Utils.utils import handle_nan_inf
+import logging
+
+logger = logging.getLogger(__name__)
 
 class DataProcessor:
     def __init__(self, config):
@@ -16,7 +19,7 @@ class DataProcessor:
         retry_delay = 5  # seconds
 
         for tf in self.config['timeframes']:
-            print(f"Downloading data for timeframe: {tf}")
+            logger.info(f"Downloading data for timeframe: {tf}")
             
             if tf == '1m':
                 start_date = end_date - timedelta(days=7)
@@ -29,9 +32,9 @@ class DataProcessor:
                 try:
                     df = yf.download(self.config['asset'], start=start_date, end=end_date, interval=tf)
                     if df.empty:
-                        print(f"Warning: Empty DataFrame for timeframe {tf}")
+                        logger.warning(f"Empty DataFrame for timeframe {tf}")
                     else:
-                        print(f"Downloaded {len(df)} rows for timeframe {tf}")
+                        logger.info(f"Downloaded {len(df)} rows for timeframe {tf}")
                         if df.index.tz is not None:
                             df.index = df.index.tz_convert('UTC')
                         else:
@@ -39,12 +42,12 @@ class DataProcessor:
                         data[tf] = df
                     break
                 except Exception as e:
-                    print(f"Error downloading data for timeframe {tf} (Attempt {attempt + 1}/{max_retries}): {e}")
+                    logger.error(f"Error downloading data for timeframe {tf} (Attempt {attempt + 1}/{max_retries}): {str(e)}")
                     if attempt < max_retries - 1:
-                        print(f"Retrying in {retry_delay} seconds...")
+                        logger.info(f"Retrying in {retry_delay} seconds...")
                         time.sleep(retry_delay)
                     else:
-                        print(f"Failed to download data for timeframe {tf} after {max_retries} attempts")
+                        logger.error(f"Failed to download data for timeframe {tf} after {max_retries} attempts")
         
         if not data:
             raise ValueError("No data could be downloaded for any timeframe")
@@ -55,7 +58,7 @@ class DataProcessor:
         processed_data = {}
         for tf, df in data.items():
             if df.empty:
-                print(f"Skipping empty DataFrame for timeframe {tf}")
+                logger.warning(f"Skipping empty DataFrame for timeframe {tf}")
                 continue
             
             df['returns'] = df['Close'].pct_change()
@@ -64,10 +67,13 @@ class DataProcessor:
             df = self.clean_data(df)
             df.dropna(inplace=True)
             
+            logger.info(f"Returns range for {tf}: [{df['returns'].min()}, {df['returns'].max()}]")
+            logger.info(f"Log returns range for {tf}: [{df['log_returns'].min()}, {df['log_returns'].max()}]")
+            
             df = self.pad_sequence(df)
             
             processed_data[tf] = df
-            print(f"Processed {len(df)} rows for timeframe {tf}")
+            logger.info(f"Processed {len(df)} rows for timeframe {tf}")
         
         if not processed_data:
             raise ValueError("No data could be processed for any timeframe")
@@ -89,9 +95,7 @@ class DataProcessor:
         if len(df) > seq_length:
             return df.iloc[-seq_length:]
         elif len(df) < seq_length:
-            pad_length = seq_length - len(df)
-            pad_df = pd.DataFrame(index=range(pad_length), columns=df.columns)
-            return pd.concat([pad_df, df]).reset_index(drop=True)
+            return df  # Return the original DataFrame without padding
         else:
             return df
 
@@ -100,18 +104,21 @@ class DataProcessor:
             raise ValueError("No data to align")
         
         aligned_data = {}
-        base_tf = max(data.keys(), key=lambda x: len(data[x]))
-        base_index = data[base_tf].index
+        base_tf = min(data.keys(), key=lambda x: pd.Timedelta(x))  # Use the shortest timeframe as base
+        base_df = data[base_tf]
 
         for tf, df in data.items():
-            if df.index.tz is None:
-                df.index = df.index.tz_localize('UTC', nonexistent='shift_forward')
-            elif df.index.tz != 'UTC':
-                df.index = df.index.tz_convert('UTC')
-            
-            aligned_df = df.reindex(base_index, method='ffill')
-            aligned_df = self.pad_sequence(aligned_df)
-            aligned_data[tf] = aligned_df
-            print(f"Aligned {len(aligned_data[tf])} rows for timeframe {tf}")
+            if tf == base_tf:
+                aligned_data[tf] = df
+            else:
+                # Resample to the base timeframe
+                resampled = df.resample(base_tf).last()
+                # Forward fill missing values, but only within the original timeframe
+                filled = resampled.fillna(method='ffill', limit=int(pd.Timedelta(tf) / pd.Timedelta(base_tf)) - 1)
+                # Align with the base DataFrame
+                aligned = filled.reindex(base_df.index, method=None)
+                aligned_data[tf] = aligned
+
+            logger.info(f"Aligned {len(aligned_data[tf])} rows for timeframe {tf}")
 
         return aligned_data
