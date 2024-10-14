@@ -29,7 +29,7 @@ class FeatureEngineer:
                 logger.warning(f"Empty DataFrame for timeframe {tf}")
                 continue
             try:
-                required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+                required_columns = ['open', 'high', 'low', 'close', 'volume']
                 if not all(col in df.columns for col in required_columns):
                     missing_columns = [col for col in required_columns if col not in df.columns]
                     raise ValueError(f"Missing required columns: {missing_columns}")
@@ -43,8 +43,16 @@ class FeatureEngineer:
                 df = handle_nan_inf(df)  # Handle NaN and Inf values
                 df = self.normalize_features(df)  # Normalize features
                 df = self.maintain_sequence_length(df)
+                
+                # Ensure required columns are present with correct capitalization
+                required_features = ['Volatility', 'Accuracy', 'trend_strength', 'ATR']
+                for feature in required_features:
+                    if feature not in df.columns:
+                        df[feature] = 0  # Set to 0 if not calculated
+                
                 featured_data[tf] = df
                 logger.info(f"Engineered features shape: {df.shape}")
+                logger.info(f"Columns: {df.columns}")
             except Exception as e:
                 logger.error(f"Error processing timeframe {tf}: {e}", exc_info=True)
         return featured_data
@@ -65,34 +73,34 @@ class FeatureEngineer:
 
         # Calculate Moving Averages
         for period in self.config['ma_periods']:
-            df[f'MA_{period}'] = df['Close'].rolling(window=period, min_periods=1).mean()
+            df[f'ma_{period}'] = df['close'].rolling(window=period, min_periods=1).mean()
         
         # Calculate MACD
         fast, slow, signal = self.config['macd_params']
         try:
-            df['EMA_fast'] = df['Close'].ewm(span=fast, adjust=False, min_periods=1).mean()
-            df['EMA_slow'] = df['Close'].ewm(span=slow, adjust=False, min_periods=1).mean()
-            df['MACD'] = df['EMA_fast'] - df['EMA_slow']
-            df['MACD_signal'] = df['MACD'].ewm(span=signal, adjust=False, min_periods=1).mean()
-            df['MACD_hist'] = df['MACD'] - df['MACD_signal']
+            df['ema_fast'] = df['close'].ewm(span=fast, adjust=False, min_periods=1).mean()
+            df['ema_slow'] = df['close'].ewm(span=slow, adjust=False, min_periods=1).mean()
+            df['macd'] = df['ema_fast'] - df['ema_slow']
+            df['macd_signal'] = df['macd'].ewm(span=signal, adjust=False, min_periods=1).mean()
+            df['macd_hist'] = df['macd'] - df['macd_signal']
         except Exception as e:
             logger.error(f"Error calculating MACD: {e}", exc_info=True)
         
         # Calculate RSI
         try:
-            delta = df['Close'].diff()
+            delta = df['close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14, min_periods=1).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14, min_periods=1).mean()
             rs = gain / loss.replace(0, np.finfo(float).eps)  # Avoid division by zero
-            df['RSI'] = 100 - (100 / (1 + rs))
+            df['rsi'] = 100 - (100 / (1 + rs))
         except Exception as e:
             logger.error(f"Error calculating RSI: {e}", exc_info=True)
 
         # Calculate ATR
         try:
-            high_low = df['High'] - df['Low']
-            high_close = np.abs(df['High'] - df['Close'].shift())
-            low_close = np.abs(df['Low'] - df['Close'].shift())
+            high_low = df['high'] - df['low']
+            high_close = np.abs(df['high'] - df['close'].shift())
+            low_close = np.abs(df['low'] - df['close'].shift())
             ranges = pd.concat([high_low, high_close, low_close], axis=1)
             true_range = np.max(ranges, axis=1)
             df['ATR'] = true_range.rolling(window=14, min_periods=1).mean()
@@ -101,15 +109,15 @@ class FeatureEngineer:
         
         # Calculate other indicators
         try:
-            df['EMA_12'] = df['Close'].ewm(span=12, adjust=False, min_periods=1).mean()
-            df['EMA_26'] = df['Close'].ewm(span=26, adjust=False, min_periods=1).mean()
-            df['DIFF'] = df['EMA_12'] - df['EMA_26']
-            df['DEA'] = df['DIFF'].ewm(span=9, adjust=False, min_periods=1).mean()
-            df['MACD'] = 2 * (df['DIFF'] - df['DEA'])
+            df['ema_12'] = df['close'].ewm(span=12, adjust=False, min_periods=1).mean()
+            df['ema_26'] = df['close'].ewm(span=26, adjust=False, min_periods=1).mean()
+            df['diff'] = df['ema_12'] - df['ema_26']
+            df['dea'] = df['diff'].ewm(span=9, adjust=False, min_periods=1).mean()
+            df['macd'] = 2 * (df['diff'] - df['dea'])
             
-            df['MOM'] = df['Close'].diff(10)
+            df['mom'] = df['close'].diff(10)
             
-            df['TSI'] = self.calculate_tsi(df['Close'])
+            df['tsi'] = self.calculate_tsi(df['close'])
         except Exception as e:
             logger.error(f"Error calculating other indicators: {e}", exc_info=True)
         
@@ -126,7 +134,7 @@ class FeatureEngineer:
             pd.DataFrame: DataFrame with added volatility.
         """
         try:
-            df['Volatility'] = df['Close'].pct_change().rolling(window=20, min_periods=1).std() * np.sqrt(252)
+            df['Volatility'] = df['close'].pct_change().rolling(window=20, min_periods=1).std() * np.sqrt(252)
         except Exception as e:
             logger.error(f"Error calculating volatility: {e}", exc_info=True)
         return df
@@ -142,7 +150,7 @@ class FeatureEngineer:
             pd.DataFrame: DataFrame with added trend strength.
         """
         try:
-            df['Trend_Strength'] = (df['MA_5'] - df['MA_20']) / df['MA_20'].replace(0, np.finfo(float).eps)
+            df['trend_strength'] = (df['ma_5'] - df['ma_20']) / df['ma_20'].replace(0, np.finfo(float).eps)
         except Exception as e:
             logger.error(f"Error calculating trend strength: {e}", exc_info=True)
         return df
@@ -158,9 +166,9 @@ class FeatureEngineer:
             pd.DataFrame: DataFrame with added volume indicators.
         """
         try:
-            df['VOL_MA_5'] = df['Volume'].rolling(window=5, min_periods=1).mean()
-            df['VOL_RATE'] = (df['Volume'] - df['VOL_MA_5']) / df['VOL_MA_5'].replace(0, np.finfo(float).eps)
-            df['OBV'] = (np.sign(df['Close'].diff()) * df['Volume']).cumsum()
+            df['vol_ma_5'] = df['volume'].rolling(window=5, min_periods=1).mean()
+            df['vol_rate'] = (df['volume'] - df['vol_ma_5']) / df['vol_ma_5'].replace(0, np.finfo(float).eps)
+            df['obv'] = (np.sign(df['close'].diff()) * df['volume']).cumsum()
         except Exception as e:
             logger.error(f"Error calculating volume indicators: {e}", exc_info=True)
         return df
@@ -203,14 +211,14 @@ class FeatureEngineer:
             pd.DataFrame: DataFrame with added WaveTrend indicators.
         """
         try:
-            ap = (df['High'] + df['Low'] + df['Close']) / 3
+            ap = (df['high'] + df['low'] + df['close']) / 3
             esa = ap.ewm(span=n1, adjust=False, min_periods=1).mean()
             d = (ap - esa).abs().ewm(span=n1, adjust=False, min_periods=1).mean()
             ci = (ap - esa) / (0.015 * d.replace(0, np.finfo(float).eps))
             wt1 = ci.ewm(span=n2, adjust=False, min_periods=1).mean()
             wt2 = wt1.rolling(window=4, min_periods=1).mean()
-            df['WaveTrend'] = wt1
-            df['WaveTrend_Signal'] = wt2
+            df['wavetrend'] = wt1
+            df['wavetrend_signal'] = wt2
         except Exception as e:
             logger.error(f"Error calculating WaveTrend: {e}", exc_info=True)
         return df
@@ -226,10 +234,10 @@ class FeatureEngineer:
             pd.DataFrame: DataFrame with added accuracy indicator.
         """
         try:
-            df['MACD_Signal'] = np.where(df['MACD'] > df['MACD_signal'], 1, -1)
-            df['Price_Direction'] = np.where(df['Close'].diff() > 0, 1, -1)
-            df['Correct_Signal'] = np.where(df['MACD_Signal'] == df['Price_Direction'], 1, 0)
-            df['Accuracy'] = df['Correct_Signal'].rolling(window=20, min_periods=1).mean()
+            df['macd_signal'] = np.where(df['macd'] > df['macd_signal'], 1, -1)
+            df['price_direction'] = np.where(df['close'].diff() > 0, 1, -1)
+            df['correct_signal'] = np.where(df['macd_signal'] == df['price_direction'], 1, 0)
+            df['Accuracy'] = df['correct_signal'].rolling(window=20, min_periods=1).mean()
         except Exception as e:
             logger.error(f"Error calculating accuracy: {e}", exc_info=True)
         return df
@@ -266,7 +274,7 @@ class FeatureEngineer:
         """
         try:
             for column in df.columns:
-                if column not in ['Open', 'High', 'Low', 'Close', 'Volume']:
+                if column not in ['open', 'high', 'low', 'close', 'volume']:
                     min_val = df[column].min()
                     max_val = df[column].max()
                     if min_val != max_val:

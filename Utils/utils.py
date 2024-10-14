@@ -5,7 +5,7 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
 def calculate_volatility(df, window=20):
-    return df['Close'].pct_change().rolling(window=window).std() * np.sqrt(252)
+    return df['close'].pct_change().rolling(window=window).std() * np.sqrt(252)
 
 def calculate_trend_strength(df):
     return (df['MA_5'] - df['MA_20']) / df['MA_20']
@@ -14,7 +14,7 @@ def calculate_accuracy(predictions, actual):
     return np.mean((np.sign(predictions) == np.sign(actual)).astype(int))
 
 def identify_market_regime(df, max_clusters=5):
-    features = ['Volatility', 'Trend_Strength', 'Volume']
+    features = ['volatility', 'trend_strength', 'volume']
     
     missing_features = [f for f in features if f not in df.columns]
     if missing_features:
@@ -25,7 +25,7 @@ def identify_market_regime(df, max_clusters=5):
     
     if len(df_clean) < max_clusters:
         print(f"Warning: Not enough data points ({len(df_clean)}) for clustering after removing NaN values.")
-        df_copy['Regime'] = 0
+        df_copy['regime'] = 0
         return df_copy
     
     X = df_clean[features].values
@@ -47,9 +47,9 @@ def identify_market_regime(df, max_clusters=5):
             break
     
     kmeans = KMeans(n_clusters=optimal_clusters, random_state=42, n_init=10)
-    df_clean['Regime'] = kmeans.fit_predict(X_scaled)
+    df_clean['regime'] = kmeans.fit_predict(X_scaled)
     
-    df_copy['Regime'] = df_clean['Regime']
+    df_copy['regime'] = df_clean['regime']
     return df_copy
 
 def adaptive_stop_loss(entry_price, atr, risk_total, k=2):

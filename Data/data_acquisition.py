@@ -5,25 +5,14 @@ import os
 import logging
 from datetime import datetime, timedelta
 import time
+from Data.Ashare import get_price
 
 logger = logging.getLogger(__name__)
-
-def timeframe_to_minutes(tf: str) -> int:
-    if tf.endswith('m'):
-        return int(tf[:-1])
-    elif tf.endswith('h'):
-        return int(tf[:-1]) * 60
-    elif tf.endswith('d'):
-        return int(tf[:-1]) * 1440  # 24 * 60
-    elif tf.endswith('M'):
-        return int(tf[:-1]) * 43200  # 30 * 24 * 60
-    else:
-        raise ValueError(f"Unsupported timeframe: {tf}")
 
 class DataAcquisition:
     def __init__(self, symbol: str, timeframes: List[str], data_dir: str):
         self.symbol = symbol
-        self.timeframes = sorted(timeframes, key=timeframe_to_minutes)
+        self.timeframes = sorted(timeframes)
         self.data_dir = data_dir
         self.data: Dict[str, pd.DataFrame] = {}
 
@@ -35,8 +24,8 @@ class DataAcquisition:
                 logger.info(f"Attempting to read file: {file_path}")
                 if not os.path.exists(file_path):
                     logger.warning(f"CSV file not found for {self.symbol} with timeframe {timeframe}")
-                    logger.info(f"Generating synthetic data for {timeframe}")
-                    df = self.generate_synthetic_data(timeframe, start_date, end_date)
+                    logger.info(f"Fetching data from API for {timeframe}")
+                    df = get_price(self.symbol, frequency=timeframe, count=1000)
                 else:
                     df = pd.read_csv(file_path)
                     if 'Date' in df.columns:
@@ -48,8 +37,8 @@ class DataAcquisition:
                 
                 if df.empty:
                     logger.warning(f"No data available for {self.symbol} with timeframe {timeframe} from {start_date} to {end_date}")
-                    logger.info(f"Generating synthetic data for {timeframe}")
-                    df = self.generate_synthetic_data(timeframe, start_date, end_date)
+                    logger.info(f"Fetching data from API for {timeframe}")
+                    df = get_price(self.symbol, frequency=timeframe, count=1000)
                 else:
                     # Ensure all columns except 'Date' are numeric
                     for col in df.columns:
@@ -58,9 +47,21 @@ class DataAcquisition:
                     # Remove rows with NaN values
                     df = df.dropna()
                     
-                    if len(df) < 100:  # If we have less than 100 data points, generate synthetic data
-                        logger.warning(f"Insufficient data for {self.symbol} with timeframe {timeframe}. Generating synthetic data.")
-                        df = self.generate_synthetic_data(timeframe, start_date, end_date, df)
+                    if len(df) < 100:  # If we have less than 100 data points, fetch more data
+                        logger.warning(f"Insufficient data for {self.symbol} with timeframe {timeframe}. Fetching more data.")
+                        df = get_price(self.symbol, frequency=timeframe, count=1000)
+                
+                # Check if the DataFrame has the required columns
+                required_columns = ['open', 'close', 'high', 'low', 'volume']
+                if not all(col in df.columns for col in required_columns):
+                    logger.error(f"Required columns {required_columns} not found in the DataFrame for {timeframe}. Fetching data again.")
+                    df = get_price(self.symbol, frequency=timeframe, count=1000)
+                    if not all(col in df.columns for col in required_columns):
+                        logger.error(f"Failed to fetch data with required columns for {timeframe}. Skipping this timeframe.")
+                        continue
+                
+                # Ensure all column names are lowercase
+                df.columns = df.columns.str.lower()
                 
                 self.data[timeframe] = df
                 logger.info(f"Successfully fetched/generated data for {self.symbol} with timeframe {timeframe}. Shape: {df.shape}")
@@ -79,60 +80,20 @@ class DataAcquisition:
         # Verify all CSV files exist
         self.verify_csv_files()
 
-    def generate_synthetic_data(self, timeframe: str, start_date: str, end_date: str, seed_data: pd.DataFrame = None):
-        logger.info(f"Generating synthetic data for {timeframe} from {start_date} to {end_date}")
-        
-        start = pd.to_datetime(start_date)
-        end = pd.to_datetime(end_date)
-        
-        if seed_data is None or len(seed_data) < 2:
-            # If we don't have seed data, create some reasonable starting values
-            last_close = 16000  # Starting price
-            daily_volatility = 0.02  # 2% daily volatility
-        else:
-            last_close = seed_data['Close'].iloc[-1]
-            daily_volatility = seed_data['Close'].pct_change().std()
-
-        # Generate daily data
-        days = pd.date_range(start=start, end=end, freq='D')
-        daily_returns = np.random.normal(0, daily_volatility, size=len(days))
-        closes = last_close * (1 + daily_returns).cumprod()
-        
-        df = pd.DataFrame({
-            'Open': closes,
-            'High': closes * (1 + abs(np.random.normal(0, daily_volatility/2, size=len(days)))),
-            'Low': closes * (1 - abs(np.random.normal(0, daily_volatility/2, size=len(days)))),
-            'Close': closes,
-            'Volume': np.random.randint(100000, 2000000, size=len(days))
-        }, index=days)
-        
-        # Resample to the desired timeframe
-        if timeframe != '1d':
-            df = df.resample(timeframe.replace('M', 'MS')).agg({
-                'Open': 'first',
-                'High': 'max',
-                'Low': 'min',
-                'Close': 'last',
-                'Volume': 'sum'
-            }).dropna()
-        
-        logger.info(f"Generated synthetic data for {timeframe}. Shape: {df.shape}")
-        return df
-
     def synthesize_larger_timeframes(self):
         logger.info("Starting synthesis of larger timeframes")
-        for i, tf in enumerate(self.timeframes):
+        for tf in self.timeframes:
             if tf not in self.data or self.data[tf].empty:
                 # Find the nearest smaller timeframe with data
-                for smaller_tf in self.timeframes[:i]:
+                for smaller_tf in self.timeframes:
                     if smaller_tf in self.data and not self.data[smaller_tf].empty:
                         logger.info(f"Synthesizing data for {tf} from {smaller_tf}")
-                        self.data[tf] = self.data[smaller_tf].resample(tf.replace('M', 'MS')).agg({
-                            'Open': 'first',
-                            'High': 'max',
-                            'Low': 'min',
-                            'Close': 'last',
-                            'Volume': 'sum'
+                        self.data[tf] = self.data[smaller_tf].resample(tf).agg({
+                            'open': 'first',
+                            'high': 'max',
+                            'low': 'min',
+                            'close': 'last',
+                            'volume': 'sum'
                         }).dropna()
                         logger.info(f"Synthesized data for {tf}. Shape: {self.data[tf].shape}")
                         # Save the synthesized data to CSV
@@ -199,7 +160,7 @@ class DataAcquisition:
             logger.warning("No data available for alignment.")
             return
 
-        shortest_tf = min(available_timeframes, key=timeframe_to_minutes)
+        shortest_tf = min(available_timeframes)
         shortest_df = self.data[shortest_tf]
 
         for tf in self.timeframes:
@@ -218,7 +179,7 @@ class DataAcquisition:
 if __name__ == "__main__":
     # Example usage
     logging.basicConfig(level=logging.INFO)
-    symbol = "BTC-USD"
+    symbol = "sh000001"
     timeframes = ["1m", "5m", "15m", "1h", "1d", "1M"]
     data_dir = "Data/csv_files"  # Update this to the actual path of your CSV files
     data_acq = DataAcquisition(symbol, timeframes, data_dir)

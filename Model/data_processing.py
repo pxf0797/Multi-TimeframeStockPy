@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from Utils.utils import handle_nan_inf
 import logging
 from Data.data_acquisition import DataAcquisition
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +67,9 @@ class DataProcessor:
             
             logger.info(f"Processing {len(df)} rows for timeframe {tf}")
             df = self.convert_to_numeric(df)
-            df['returns'] = df['Close'].pct_change()
-            df['log_returns'] = np.log(df['Close'] / df['Close'].shift(1))
-            df['Volatility'] = df['returns'].rolling(window=20).std() * np.sqrt(252)
+            df['returns'] = df['close'].pct_change()
+            df['log_returns'] = np.log(df['close'] / df['close'].shift(1))
+            df['volatility'] = df['returns'].rolling(window=20).std() * np.sqrt(252)
             df = self.clean_data(df)
             
             logger.info(f"After cleaning: {len(df)} rows for timeframe {tf}")
@@ -110,7 +111,7 @@ class DataProcessor:
         return df
 
     def clean_data(self, df):
-        for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+        for col in ['open', 'high', 'low', 'close', 'volume']:
             df[col] = df[col].clip(lower=df[col].quantile(0.01), upper=df[col].quantile(0.99))
         
         df = handle_nan_inf(df)

@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 def load_config():
     # Load configuration from a file or environment variables
     config = {
-        'asset': 'BTC-USD',
+        'asset': 'sh000001',
         'timeframes': ['1m', '5m', '15m', '1h', '1d', '1M'],
         'ma_periods': [3, 5, 10, 20],
         'macd_params': (5, 10, 5),
@@ -219,17 +219,26 @@ def main():
         if args.mode == 'full_cycle' or args.mode in ['train', 'backtest', 'optimize', 'live']:
             if 'processed_data' not in locals() or 'featured_data' not in locals():
                 logger.info("Loading previously acquired data...")
-                # Here you would load the previously acquired and processed data
-                # For now, we'll just call acquire_data and process_data again
                 raw_data = acquire_data(config)
                 processed_data, featured_data = process_data(config, raw_data)
 
-            if args.mode == 'train' or args.mode == 'full_cycle':
+            model_builder = ModelBuilder(config)
+            if args.mode == 'train' or args.mode == 'full_cycle' or not os.path.exists(config['model_save_path']):
+                logger.info("Training new model...")
                 trained_model = train_model(config, featured_data, args.continue_training)
             else:
-                model_builder = ModelBuilder(config)
+                logger.info("Loading existing model...")
                 trained_model = model_builder.build_model(featured_data)
-                trained_model.load_state_dict(torch.load(config['model_save_path'], map_location=config['device']))
+                try:
+                    trained_model.load_state_dict(torch.load(config['model_save_path'], map_location=config['device']))
+                except RuntimeError as e:
+                    logger.warning(f"Failed to load existing model: {e}")
+                    logger.info("Training new model...")
+                    trained_model = train_model(config, featured_data, False)
+
+            if trained_model is None:
+                logger.error("Model training or loading failed. Exiting.")
+                return
 
             signals, dynamic_weights, s_comprehensive, trend_cons = generate_signals(config, trained_model, featured_data)
             managed_signals, entry_strategy = manage_risk(config, signals, processed_data, s_comprehensive, trend_cons)
