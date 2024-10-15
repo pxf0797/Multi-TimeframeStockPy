@@ -50,16 +50,28 @@ class GetStock:
     #======================================================
     # Save csv Operation
     #------------------------------------------------------
-    def SaveStockCsv(self):
+    def SaveStockCsv(self,frequency):
         #self.__csvfile.writeLists(self.__df)
         # saving the DataFrame as a CSV file
-        gfg_csv_data = self.__df.to_csv('test_data.csv', index = True)
+        gfg_csv_data = self.__df.to_csv(frequency+'_test_data.csv', index = True)
         print('\nCSV String:\n', gfg_csv_data)
 
 if __name__ == '__main__':
     gs = GetStock()
     gs.SetStockName('sh000001')
-    gs.GetStock(frequency='60m',count=5000)
+    gs.GetStock(frequency='1m',count=2000)
     gs.ShowDf()
-    gs.SaveStockCsv()
+    gs.SaveStockCsv(frequency='1m')
+    gs.GetStock(frequency='5m',count=2000)
+    gs.SaveStockCsv(frequency='5m')
+    gs.GetStock(frequency='15m',count=2000)
+    gs.SaveStockCsv(frequency='15m')
+    gs.GetStock(frequency='60m',count=2000)
+    gs.SaveStockCsv(frequency='60m')
+    gs.GetStock(frequency='1d',count=1000)
+    gs.SaveStockCsv(frequency='1d')
+    gs.GetStock(frequency='1w',count=500)
+    gs.SaveStockCsv(frequency='1w')
+    gs.GetStock(frequency='1M',count=50)
+    gs.SaveStockCsv(frequency='1M_')
 
