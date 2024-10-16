@@ -40,12 +40,12 @@ class GetStock:
         '''
         self.__df = get_price(self.__stock_name,frequency=frequency,count=count)
         
-    def GetStockDate(self,frequency,count,date):
+    def GetStockDate(self,frequency,count,end_date):
         '''
         frequency: '1m','5m','15m','30m','60m', '1d'=240m, '1w'=1200m, '1M'=7200m
         counts: days or frequency counts
         '''
-        self.__df = get_price(self.__stock_name,frequency=frequency,count=count,end_date=date)
+        self.__df = get_price(self.__stock_name,frequency=frequency,count=count,end_date=end_date)
         
     #======================================================
     # Save csv Operation
@@ -59,7 +59,7 @@ class GetStock:
 if __name__ == '__main__':
     gs = GetStock()
     gs.SetStockName('sh000001')
-    gs.GetStock(frequency='1m',count=2000)
+    '''gs.GetStock(frequency='1m',count=2000)
     gs.ShowDf()
     gs.SaveStockCsv(frequency='1m')
     gs.GetStock(frequency='5m',count=2000)
@@ -73,5 +73,10 @@ if __name__ == '__main__':
     gs.GetStock(frequency='1w',count=500)
     gs.SaveStockCsv(frequency='1w')
     gs.GetStock(frequency='1M',count=50)
-    gs.SaveStockCsv(frequency='1M_')
+    gs.SaveStockCsv(frequency='1M_')'''
+    
+    gs.GetStockDate(frequency='1m',end_date='2024-9-30',count=2000)
+    gs.SaveStockCsv(frequency='1m_date')
+    gs.GetStockDate(frequency='5m',end_date='2024-9-30',count=2000)
+    gs.SaveStockCsv(frequency='5m_date')
 
