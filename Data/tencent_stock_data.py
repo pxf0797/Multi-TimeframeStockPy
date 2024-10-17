@@ -35,7 +35,15 @@ class TencentStockData:
         
         # Adjust URL construction and date range based on period
         if period in ['1d', '1w', '1M']:
-            url = f"{self.base_url2}?param={self.code},{api_period},,{start_date},{end_date.strftime('%Y-%m-%d')},640"
+            # 调整开始日期，确保有足够的历史数据
+            if period == '1d':
+                start_date = (end_date - timedelta(days=30)).strftime('%Y-%m-%d')
+            elif period == '1w':
+                start_date = (end_date - timedelta(weeks=8)).strftime('%Y-%m-%d')
+            else:  # '1M'
+                start_date = (end_date - timedelta(days=180)).strftime('%Y-%m-%d')
+            
+            url = f"{self.base_url2}?param={self.code},{api_period},,{start_date},{end_date.strftime('%Y-%m-%d')},640,qfq"
         else:
             url = f"{self.base_url}?param={self.code},{api_period},,{start_date}"
         
@@ -46,13 +54,13 @@ class TencentStockData:
             response.raise_for_status()
             data = response.json()
             logging.debug(f"API response: {data}")
-        except requests.RequestException as e:
-            logging.error(f"Error fetching data: {e}")
-            return pd.DataFrame()
-
-        if 'data' in data and self.code in data['data']:
+            
+            if data['code'] != 0 or 'data' not in data or self.code not in data['data']:
+                logging.error(f"Error in API response: {data}")
+                return pd.DataFrame()
+            
             if period in ['1d', '1w', '1M']:
-                stock_data = data['data'][self.code][api_period]
+                stock_data = data['data'][self.code].get(f'qfq{api_period}', data['data'][self.code].get(api_period, []))
             elif isinstance(data['data'][self.code], dict) and api_period in data['data'][self.code]:
                 stock_data = data['data'][self.code][api_period]
             elif isinstance(data['data'][self.code], list):
@@ -66,14 +74,17 @@ class TencentStockData:
                 all_data.extend(parsed_data)
             else:
                 logging.info(f"No data available for the specified period")
-        else:
-            logging.info(f"No data available for the specified stock code and period")
-        
+        except requests.RequestException as e:
+            logging.error(f"Error fetching data: {e}")
+            return pd.DataFrame()
+
         df = pd.DataFrame(all_data)
         if not df.empty:
             df['datetime'] = pd.to_datetime(df['datetime'])
             df['date'] = df['datetime'].dt.date
             df = df[(df['date'] >= current_date.date()) & (df['date'] <= end_date.date())]
+            df.set_index('datetime', inplace=True)
+            df.index.name = ''
         else:
             logging.warning(f"No data retrieved for period {period} between {start_date} and {end_date}")
         self.data[period] = df
@@ -101,12 +112,12 @@ class TencentStockData:
                 elif isinstance(item, dict):
                     parsed_item = {
                         'datetime': item.get('dt'),
-                        'open': float(item.get('o', 0)),
-                        'close': float(item.get('c', 0)),
-                        'high': float(item.get('h', 0)),
-                        'low': float(item.get('l', 0)),
-                        'volume': float(item.get('v', 0)),
-                        'amount': float(item.get('a', 0))
+                        'open': float(item.get('open', item.get('o', 0))),
+                        'close': float(item.get('close', item.get('c', 0))),
+                        'high': float(item.get('high', item.get('h', 0))),
+                        'low': float(item.get('low', item.get('l', 0))),
+                        'volume': float(item.get('volume', item.get('v', 0))),
+                        'amount': float(item.get('amount', item.get('a', 0)))
                     }
                     parsed_data.append(parsed_item)
             except (ValueError, IndexError) as e:
@@ -123,7 +134,7 @@ class TencentStockData:
             return
 
         # 按日期分组的统计
-        daily_stats = df.groupby('date').agg({
+        daily_stats = df.groupby(df.index.date).agg({
             'open': 'first',
             'close': 'last',
             'high': 'max',
@@ -147,7 +158,7 @@ class TencentStockData:
         
         if period in ['1m', '5m', '15m', '30m', '1h']:
             # 找出交易最活跃的时段
-            df['hour'] = df['datetime'].dt.hour
+            df['hour'] = df.index.hour
             hourly_volume = df.groupby('hour')['volume'].mean()
             most_active_hour = hourly_volume.idxmax()
             logging.info(f"\n交易最活跃的时段：{most_active_hour}时，平均交易量：{hourly_volume.max():.2f}")
@@ -181,5 +192,5 @@ class TencentStockData:
         filename = f"data/{self.code}_{period}_{start_date}_{end_date}.csv"
         
         # 保存数据到CSV文件
-        df.to_csv(filename, index=False)
+        df.to_csv(filename)
         logging.info(f"Data saved to file: {filename}")
