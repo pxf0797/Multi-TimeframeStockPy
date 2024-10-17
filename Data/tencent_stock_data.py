@@ -11,6 +11,7 @@ class TencentStockData:
     def __init__(self, code):
         self.code = code
         self.base_url = "http://ifzq.gtimg.cn/appstock/app/kline/mkline"
+        self.base_url2 = "http://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
         self.data = {}
         self.periods = {
             '1m': 'm1', '5m': 'm5', '15m': 'm15', '30m': 'm30', '1h': 'm60',
@@ -32,9 +33,9 @@ class TencentStockData:
             end_date = datetime.combine(today, datetime.min.time())
             logging.warning(f"End date adjusted to today: {end_date.strftime('%Y-%m-%d')}")
         
-        # Adjust URL construction based on period
+        # Adjust URL construction and date range based on period
         if period in ['1d', '1w', '1M']:
-            url = f"{self.base_url}?param={self.code},{api_period},{start_date},{end_date}"
+            url = f"{self.base_url2}?param={self.code},{api_period},,{start_date},{end_date.strftime('%Y-%m-%d')},640"
         else:
             url = f"{self.base_url}?param={self.code},{api_period},,{start_date}"
         
@@ -50,7 +51,9 @@ class TencentStockData:
             return pd.DataFrame()
 
         if 'data' in data and self.code in data['data']:
-            if isinstance(data['data'][self.code], dict) and api_period in data['data'][self.code]:
+            if period in ['1d', '1w', '1M']:
+                stock_data = data['data'][self.code][api_period]
+            elif isinstance(data['data'][self.code], dict) and api_period in data['data'][self.code]:
                 stock_data = data['data'][self.code][api_period]
             elif isinstance(data['data'][self.code], list):
                 stock_data = data['data'][self.code]
@@ -80,6 +83,9 @@ class TencentStockData:
         parsed_data = []
         for item in data:
             try:
+                if isinstance(item, str):
+                    # Split the string into a list
+                    item = item.split(' ')
                 if isinstance(item, list):
                     parsed_item = {
                         'datetime': item[0],
@@ -177,5 +183,3 @@ class TencentStockData:
         # 保存数据到CSV文件
         df.to_csv(filename, index=False)
         logging.info(f"Data saved to file: {filename}")
-
-# 主程序中不再包含测试代码
