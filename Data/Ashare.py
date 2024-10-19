@@ -46,7 +46,7 @@ class TencentDataFetcher(StockDataFetcher):
     @staticmethod
     def get_price_day(code: str, end_date: str = '', count: int = 10, frequency: str = '1d') -> pd.DataFrame:
         """Fetch daily price data from Tencent"""
-        unit = 'week' if frequency == '1w' else 'month' if frequency == '1M' else 'quarter' if frequency == '1q' else 'day'
+        unit = 'week' if frequency == '1w' else 'month' if frequency == '1m' else 'quarter' if frequency == '1q' else 'day'
         end_date = TencentDataFetcher.process_end_date(end_date)
         end_date = '' if end_date == datetime.now().strftime('%Y-%m-%d') else end_date
 
@@ -159,15 +159,28 @@ def get_price(code: str, end_date: str = '', count: int = 10, frequency: str = '
                 df = TencentDataFetcher.get_price_day(xcode, end_date=end_date, count=count, frequency=frequency)
             if df.empty and frequency == '1q':
                 logger.info(f"No quarterly data from Tencent, falling back to monthly data")
-                df = get_price(xcode, end_date=end_date, count=count*3, frequency='1M')  # Fetch 3 times more monthly data
-                df = df.resample('Q').last()  # Resample to quarterly data
+                monthly_df = get_price(xcode, end_date=end_date, count=count*3, frequency='1m')  # Fetch 3 times more monthly data
+                if monthly_df is not None and not monthly_df.empty:
+                    df = monthly_df.resample('Q').last()  # Resample to quarterly data
+                    logger.info(f"Successfully resampled monthly data to quarterly, got {len(df)} rows")
+                else:
+                    logger.warning(f"Failed to fetch monthly data for {xcode}")
             return df
         except Exception as e:
             logger.warning(f"Failed to fetch data from Sina and Tencent: {e}")
             if frequency == '1q':
                 logger.info(f"Falling back to monthly data for quarterly")
-                df = get_price(xcode, end_date=end_date, count=count*3, frequency='1M')  # Fetch 3 times more monthly data
-                return df.resample('Q').last()  # Resample to quarterly data
+                try:
+                    monthly_df = get_price(xcode, end_date=end_date, count=count*3, frequency='1m')  # Fetch 3 times more monthly data
+                    if monthly_df is not None and not monthly_df.empty:
+                        df = monthly_df.resample('Q').last()  # Resample to quarterly data
+                        logger.info(f"Successfully resampled monthly data to quarterly, got {len(df)} rows")
+                        return df
+                    else:
+                        logger.warning(f"Failed to fetch monthly data for {xcode}")
+                except Exception as e:
+                    logger.error(f"Error while fetching monthly data: {e}")
+            logger.error(f"All attempts to fetch data failed for {xcode} with frequency {frequency}")
             return pd.DataFrame()
 
     if frequency in ['5m', '15m', '30m', '60m']:
@@ -176,7 +189,11 @@ def get_price(code: str, end_date: str = '', count: int = 10, frequency: str = '
             return SinaDataFetcher.get_price(xcode, end_date=end_date, count=count, frequency=frequency)
         except Exception as e:
             logger.warning(f"Failed to fetch data from Sina, trying Tencent: {e}")
-            return TencentDataFetcher.get_price_min(xcode, end_date=end_date, count=count, frequency=frequency)
+            try:
+                return TencentDataFetcher.get_price_min(xcode, end_date=end_date, count=count, frequency=frequency)
+            except Exception as e:
+                logger.error(f"Failed to fetch data from Tencent: {e}")
+                return pd.DataFrame()
 
 if __name__ == '__main__':
     # Test cases
