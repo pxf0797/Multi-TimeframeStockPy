@@ -18,9 +18,9 @@ Example:
     df = gs.get_stock_data('2023-01-01', '2023-12-31', '1d')
 """
 
-from Data.Ashare import *
+from Ashare import *
 import os
-from Data import csvfile
+import csvfile
 import pandas as pd
 from datetime import datetime, timedelta
 import logging

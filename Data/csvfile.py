@@ -6,7 +6,7 @@ import sys
 import datetime
 import os
 import pandas as pd
-from Data import text
+import text
 import csv
 
 class csvfile:
