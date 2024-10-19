@@ -3,6 +3,36 @@
 Ashare 股票行情数据双核心版 (https://github.com/mpquant/Ashare)
 Optimized and restructured version
 tushare 1b298c8f2a7b7a0c929ae7552434213df054ab4fb49cb7676d14e0f9
+
+This module provides functionality to fetch stock data from Tencent and Sina sources.
+It offers a flexible interface to retrieve various types of stock price data,
+including daily, weekly, monthly, quarterly, and intraday data.
+
+Usage:
+1. Import the module:
+   from Data.Ashare import get_price
+
+2. Fetch stock data using the get_price function:
+   df = get_price(code, end_date='', count=10, frequency='1d', fields=[])
+
+   Parameters:
+   - code: Stock code (e.g., 'sh000001' for Shanghai Composite Index)
+   - end_date: End date for data retrieval (optional, default is current date)
+   - count: Number of data points to retrieve (default is 10)
+   - frequency: Data frequency ('1d' for daily, '1w' for weekly, '1m' for monthly,
+                '1q' for quarterly, '5m', '15m', '30m', '60m' for intraday data)
+   - fields: List of fields to retrieve (optional, currently not used)
+
+3. The function returns a pandas DataFrame with the requested stock data.
+
+Example:
+df = get_price('sh000001', frequency='1d', count=10)
+print(df)  # This will print the last 10 days of daily data for the Shanghai Composite Index
+
+Note on quarterly data ('1q'):
+Quarterly data is obtained by resampling monthly data. The function fetches
+monthly data and then resamples it to quarterly frequency, taking the last
+value of each quarter.
 """
 
 import json
@@ -45,7 +75,12 @@ class TencentDataFetcher(StockDataFetcher):
 
     @staticmethod
     def get_price_day(code: str, end_date: str = '', count: int = 10, frequency: str = '1d') -> pd.DataFrame:
-        """Fetch daily price data from Tencent"""
+        """
+        Fetch daily price data from Tencent
+        
+        This method is used internally by the get_price function to retrieve daily,
+        weekly, or monthly data from Tencent when Sina data is unavailable.
+        """
         unit = 'week' if frequency == '1w' else 'month' if frequency == '1m' else 'day'
         end_date = TencentDataFetcher.process_end_date(end_date)
         end_date = '' if end_date == datetime.now().strftime('%Y-%m-%d') else end_date
@@ -75,7 +110,12 @@ class TencentDataFetcher(StockDataFetcher):
 
     @staticmethod
     def get_price_min(code: str, end_date: Optional[str] = None, count: int = 10, frequency: str = '1d') -> pd.DataFrame:
-        """Fetch minute price data from Tencent"""
+        """
+        Fetch minute price data from Tencent
+        
+        This method is used internally by the get_price function to retrieve intraday
+        data from Tencent when Sina data is unavailable.
+        """
         ts = int(frequency[:-1]) if frequency[:-1].isdigit() else 1
         end_date = TencentDataFetcher.process_end_date(end_date) if end_date else None
 
@@ -108,7 +148,12 @@ class SinaDataFetcher(StockDataFetcher):
 
     @staticmethod
     def get_price(code: str, end_date: str = '', count: int = 10, frequency: str = '60m') -> pd.DataFrame:
-        """Fetch price data from Sina"""
+        """
+        Fetch price data from Sina
+        
+        This method is used internally by the get_price function to retrieve data
+        from Sina. It supports daily, weekly, monthly, and intraday data.
+        """
         frequency = frequency.replace('1d', '240m').replace('1w', '1200m').replace('1m', '7200m')
         ts = int(frequency[:-1]) if frequency[:-1].isdigit() else 1
         
@@ -144,7 +189,27 @@ class SinaDataFetcher(StockDataFetcher):
             raise
 
 def get_price(code: str, end_date: str = '', count: int = 10, frequency: str = '1d', fields: list = []) -> pd.DataFrame:
-    """Main function to get stock price data"""
+    """
+    Main function to get stock price data
+    
+    This function serves as the primary interface for retrieving stock data.
+    It attempts to fetch data from Sina first, and if unsuccessful, falls back to Tencent.
+    
+    Parameters:
+    - code: Stock code (e.g., 'sh000001' for Shanghai Composite Index)
+    - end_date: End date for data retrieval (optional, default is current date)
+    - count: Number of data points to retrieve (default is 10)
+    - frequency: Data frequency ('1d' for daily, '1w' for weekly, '1m' for monthly,
+                 '1q' for quarterly, '5m', '15m', '30m', '60m' for intraday data)
+    - fields: List of fields to retrieve (optional, currently not used)
+    
+    Returns:
+    - pandas DataFrame containing the requested stock data
+    
+    Note:
+    For quarterly data ('1q'), the function fetches monthly data and resamples
+    it to quarterly frequency, taking the last value of each quarter.
+    """
     xcode = code.replace('.XSHG', '').replace('.XSHE', '')
     xcode = f"sh{xcode}" if 'XSHG' in code else f"sz{xcode}" if 'XSHE' in code else code
 
