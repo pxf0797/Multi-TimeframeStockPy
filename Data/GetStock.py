@@ -19,6 +19,7 @@ Example:
 """
 
 from Ashare import *
+import os
 import csvfile
 import pandas as pd
 from datetime import datetime, timedelta
@@ -84,7 +85,7 @@ class GetStock:
         """
         self.__df = self.__df[self.__df.index >= start_date]
 
-    def save_stock_csv(self, frequency, start_date, end_date):
+    def save_stock_csv(self, frequency, start_date, end_date,data_dir=''):
         """
         Save the current DataFrame to a CSV file.
         
@@ -97,10 +98,11 @@ class GetStock:
             return
 
         filename = f'{self.__stock_name}_{frequency}_{start_date}_{end_date}.csv'
-        self.__df.to_csv(filename, index=True)
-        logger.info(f'Data saved to {filename}')
+        file_path = os.path.join(data_dir, filename)
+        self.__df.to_csv(file_path, index=True)
+        logger.info(f'Data saved to {file_path}')
 
-    def get_stock_data(self, start_date, end_date, period):
+    def get_stock_data(self, start_date, end_date, period,data_dir=''):
         """
         Interface for retrieving stock data for different time periods.
         This method fetches data, filters it based on the date range,
@@ -141,7 +143,7 @@ class GetStock:
             self.filter_date_range(start_date)
 
             # Save to CSV
-            self.save_stock_csv(frequency=period, start_date=start_date.strftime('%Y-%m-%d'), end_date=end_date.strftime('%Y-%m-%d'))
+            self.save_stock_csv(frequency=period, start_date=start_date.strftime('%Y-%m-%d'), end_date=end_date.strftime('%Y-%m-%d'),data_dir=data_dir)
 
             return self.__df
 
