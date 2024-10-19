@@ -38,7 +38,15 @@ class GetStock:
                 end_date = datetime.now().strftime('%Y-%m-%d')
 
             logger.info(f"Attempting to fetch {frequency} data for {self.__stock_name}")
-            self.__df = get_price(self.__stock_name, frequency=frequency, count=count, end_date=end_date)
+            
+            if frequency == '1q':
+                # For quarterly data, fetch monthly data and resample
+                self.__df = get_price(self.__stock_name, frequency='1m', count=count*3, end_date=end_date)
+                if not self.__df.empty:
+                    self.__df = self.__df.resample('QE').last()
+                    logger.info(f"Successfully resampled monthly data to quarterly for {self.__stock_name}")
+            else:
+                self.__df = get_price(self.__stock_name, frequency=frequency, count=count, end_date=end_date)
 
             if self.__df.empty:
                 logger.warning(f"No data retrieved for {self.__stock_name} with frequency {frequency}")
@@ -48,12 +56,18 @@ class GetStock:
         except Exception as e:
             logger.error(f"Error retrieving data: {str(e)}")
 
-    def save_stock_csv(self, frequency):
+    def filter_date_range(self, start_date):
+        """
+        Filter the dataframe to include only data from the start_date onwards.
+        """
+        self.__df = self.__df[self.__df.index >= start_date]
+
+    def save_stock_csv(self, frequency, start_date, end_date):
         if self.__df.empty:
             logger.warning("No data to save. Please fetch data first.")
             return
 
-        filename = f'{frequency}_{self.__stock_name}_data.csv'
+        filename = f'{self.__stock_name}_{frequency}_{start_date}_{end_date}.csv'
         self.__df.to_csv(filename, index=True)
         logger.info(f'Data saved to {filename}')
 
@@ -61,22 +75,34 @@ if __name__ == '__main__':
     gs = GetStock()
     gs.set_stock_name('sh000001')
 
-    # Test 5-minute data
-    gs.get_stock(frequency='5m', count=1000)
-    gs.save_stock_csv(frequency='5m')
-    
-    # Test 60-minute data
-    gs.get_stock(frequency='60m', count=1000)
-    gs.save_stock_csv(frequency='60m')
+    end_date = datetime.now().strftime('%Y-%m-%d')
 
-    # Test daily data
-    gs.get_stock(frequency='1d', count=100)
-    gs.save_stock_csv(frequency='1d')
+    # Test 5-minute data (past week)
+    start_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+    gs.get_stock(frequency='5m', count=2000, end_date=end_date)
+    gs.filter_date_range(start_date)
+    gs.save_stock_csv(frequency='5m', start_date=start_date, end_date=end_date)
     
-    # Test monthly data
-    gs.get_stock(frequency='1m', count=100)
-    gs.save_stock_csv(frequency='1m')
+    # Test 60-minute data (past month)
+    start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+    gs.get_stock(frequency='60m', count=1000, end_date=end_date)
+    gs.filter_date_range(start_date)
+    gs.save_stock_csv(frequency='60m', start_date=start_date, end_date=end_date)
 
-    # Test quarterly data
-    gs.get_stock(frequency='1q', count=20)
-    gs.save_stock_csv(frequency='1q')
+    # Test daily data (past year)
+    start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
+    gs.get_stock(frequency='1d', count=500, end_date=end_date)
+    gs.filter_date_range(start_date)
+    gs.save_stock_csv(frequency='1d', start_date=start_date, end_date=end_date)
+    
+    # Test monthly data (past 5 years)
+    start_date = (datetime.now() - timedelta(days=365*5)).strftime('%Y-%m-%d')
+    gs.get_stock(frequency='1m', count=100, end_date=end_date)
+    gs.filter_date_range(start_date)
+    gs.save_stock_csv(frequency='1m', start_date=start_date, end_date=end_date)
+
+    # Test quarterly data (past 10 years)
+    start_date = (datetime.now() - timedelta(days=365*10)).strftime('%Y-%m-%d')
+    gs.get_stock(frequency='1q', count=50, end_date=end_date)
+    gs.filter_date_range(start_date)
+    gs.save_stock_csv(frequency='1q', start_date=start_date, end_date=end_date)
