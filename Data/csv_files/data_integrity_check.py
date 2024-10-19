@@ -209,35 +209,6 @@ def check_weekly_data_integrity(file_path, holiday_file):
 
 # 测试函数
 def test_data_integrity():
-    # 创建测试用的日线数据
-    daily_data = pd.DataFrame({
-        'day': pd.date_range(start='2023-01-01', end='2023-01-10'),
-        'open': [100, 101, 102, 103, 104, 105, 106, 107, 108, 109],
-        'high': [102, 103, 104, 105, 106, 107, 108, 109, 110, 111],
-        'low': [98, 99, 100, 101, 102, 103, 104, 105, 106, 107],
-        'close': [101, 102, 103, 104, 105, 106, 107, 108, 109, 110],
-        'volume': [1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900]
-    })
-    daily_data.to_csv('test_daily_data.csv', index=False)
-
-    # 创建测试用的周线数据
-    weekly_data = pd.DataFrame({
-        'day': pd.date_range(start='2023-01-06', end='2023-02-03', freq='W-FRI'),
-        'open': [100, 105, 110, 115, 120],
-        'high': [105, 110, 115, 120, 125],
-        'low': [95, 100, 105, 110, 115],
-        'close': [102, 107, 112, 117, 122],
-        'volume': [5000, 5500, 6000, 6500, 7000]
-    })
-    weekly_data.to_csv('test_weekly_data.csv', index=False)
-
-    # 创建测试用的假期数据
-    holidays_data = pd.DataFrame({
-        'date': ['2023-01-02', '2023-01-23'],
-        'holiday': ['New Year', 'Chinese New Year']
-    })
-    holidays_data.to_csv('test_holidays.csv', index=False)
-
     # 测试日线数据完整性检查
     print("测试日线数据完整性检查:")
     check_daily_data_integrity('sz000001_1d_1983-09-24_2024-10-18_2.csv', 'chinese_holidays.csv')
