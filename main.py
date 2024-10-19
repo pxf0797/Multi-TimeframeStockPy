@@ -29,7 +29,8 @@ def load_config():
     # Load configuration from a file or environment variables
     config = {
         'asset': 'sh000001',
-        'timeframes': ['1m', '5m', '15m', '1h', '1d', '1M'],
+        'end_date_count' : ['2024-10-18', '1000'], # for lesss len 1d, count is the date, others is period counts
+        'timeframes': ['5m', '15m', '60m', '1d', '1m', '1q'],
         'ma_periods': [3, 5, 10, 20],
         'macd_params': (5, 10, 5),
         'input_size': 33,  # Will be updated based on actual feature count
