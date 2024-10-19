@@ -71,38 +71,81 @@ class GetStock:
         self.__df.to_csv(filename, index=True)
         logger.info(f'Data saved to {filename}')
 
+    def get_stock_data(self, start_date, end_date, period):
+        """
+        Interface for retrieving stock data for different time periods.
+        
+        :param start_date: Start date for the data (YYYY-MM-DD)
+        :param end_date: End date for the data (YYYY-MM-DD)
+        :param period: '5m','15m','30m','60m','1d','1w','1m','1q'
+        :return: DataFrame with the requested stock data
+        """
+        try:
+            # Convert dates to datetime objects
+            start_date = datetime.strptime(start_date, '%Y-%m-%d')
+            end_date = datetime.strptime(end_date, '%Y-%m-%d')
+
+            # Calculate the number of days between start and end dates
+            days_diff = (end_date - start_date).days
+
+            # Calculate count based on period and date range
+            if period in ['5m', '15m', '30m', '60m']:
+                # Assuming market is open 4 hours a day (simplified)
+                count = (days_diff * 4 * 60) // int(period[:-1])
+            elif period == '1d':
+                count = days_diff
+            elif period == '1w':
+                count = days_diff // 7
+            elif period == '1m':
+                count = days_diff // 30
+            elif period == '1q':
+                count = (days_diff // 90) + 1
+            else:
+                raise ValueError(f"Invalid period: {period}")
+
+            # Fetch data
+            self.get_stock(frequency=period, count=count, end_date=end_date.strftime('%Y-%m-%d'))
+
+            # Filter date range
+            self.filter_date_range(start_date)
+
+            # Save to CSV
+            self.save_stock_csv(frequency=period, start_date=start_date.strftime('%Y-%m-%d'), end_date=end_date.strftime('%Y-%m-%d'))
+
+            return self.__df
+
+        except Exception as e:
+            logger.error(f"Error in get_stock_data: {str(e)}")
+            return pd.DataFrame()
+
 if __name__ == '__main__':
     gs = GetStock()
     gs.set_stock_name('sh000001')
 
+    # Test the new interface
     end_date = datetime.now().strftime('%Y-%m-%d')
 
     # Test 5-minute data (past week)
     start_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
-    gs.get_stock(frequency='5m', count=2000, end_date=end_date)
-    gs.filter_date_range(start_date)
-    gs.save_stock_csv(frequency='5m', start_date=start_date, end_date=end_date)
-    
+    df_5m = gs.get_stock_data(start_date, end_date, '5m')
+    print("5-minute data shape:", df_5m.shape)
+
     # Test 60-minute data (past month)
     start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-    gs.get_stock(frequency='60m', count=1000, end_date=end_date)
-    gs.filter_date_range(start_date)
-    gs.save_stock_csv(frequency='60m', start_date=start_date, end_date=end_date)
+    df_60m = gs.get_stock_data(start_date, end_date, '60m')
+    print("60-minute data shape:", df_60m.shape)
 
     # Test daily data (past year)
     start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
-    gs.get_stock(frequency='1d', count=500, end_date=end_date)
-    gs.filter_date_range(start_date)
-    gs.save_stock_csv(frequency='1d', start_date=start_date, end_date=end_date)
-    
+    df_1d = gs.get_stock_data(start_date, end_date, '1d')
+    print("Daily data shape:", df_1d.shape)
+
     # Test monthly data (past 5 years)
     start_date = (datetime.now() - timedelta(days=365*5)).strftime('%Y-%m-%d')
-    gs.get_stock(frequency='1m', count=100, end_date=end_date)
-    gs.filter_date_range(start_date)
-    gs.save_stock_csv(frequency='1m', start_date=start_date, end_date=end_date)
+    df_1m = gs.get_stock_data(start_date, end_date, '1m')
+    print("Monthly data shape:", df_1m.shape)
 
     # Test quarterly data (past 10 years)
     start_date = (datetime.now() - timedelta(days=365*10)).strftime('%Y-%m-%d')
-    gs.get_stock(frequency='1q', count=50, end_date=end_date)
-    gs.filter_date_range(start_date)
-    gs.save_stock_csv(frequency='1q', start_date=start_date, end_date=end_date)
+    df_1q = gs.get_stock_data(start_date, end_date, '1q')
+    print("Quarterly data shape:", df_1q.shape)
