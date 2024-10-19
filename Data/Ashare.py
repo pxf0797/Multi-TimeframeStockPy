@@ -78,7 +78,8 @@ class TencentDataFetcher(StockDataFetcher):
             buf = data['data'][code][f'm{ts}']
             df = TencentDataFetcher.create_dataframe(buf, ['time', 'open', 'close', 'high', 'low', 'volume', 'n1', 'n2'])
             df = df[['open', 'close', 'high', 'low', 'volume']]
-            df['close'].iloc[-1] = float(data['data'][code]['qt'][code][3])
+            # Update the last close price using loc instead of iloc
+            df.loc[df.index[-1], 'close'] = float(data['data'][code]['qt'][code][3])
             return df
         except requests.RequestException as e:
             logger.error(f"Error fetching data from Tencent: {e}")
