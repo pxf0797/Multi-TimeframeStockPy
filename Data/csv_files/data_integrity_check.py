@@ -5,14 +5,72 @@ def load_holidays(holiday_file):
     holidays_df = pd.read_csv(holiday_file, parse_dates=['date'])
     return set(holidays_df['date'].dt.date)
 
+def check_data_content(df):
+    issues_found = []
+    
+    # 检查列是否完整
+    expected_columns = ['day', 'open', 'high', 'low', 'close', 'volume']
+    missing_columns = set(expected_columns) - set(df.columns)
+    if missing_columns:
+        print(f"  缺失列: {', '.join(missing_columns)}")
+        issues_found.append(f"缺失 {len(missing_columns)} 列")
+    
+    # 检查数值列的有效性和合理性
+    numeric_columns = ['open', 'high', 'low', 'close', 'volume']
+    for col in numeric_columns:
+        if col in df.columns:
+            invalid_rows = df[~df[col].apply(lambda x: isinstance(x, (int, float)))].index
+            if not invalid_rows.empty:
+                print(f"  '{col}'列中存在无效数据，行数: {len(invalid_rows)}")
+                issues_found.append(f"'{col}'列有 {len(invalid_rows)} 行无效数据")
+            
+            if col != 'volume':
+                unreasonable_prices = df[(df[col] <= 0) | (df[col] > 1000)].index
+                if not unreasonable_prices.empty:
+                    print(f"  '{col}'列中存在可疑的价格数据，行数: {len(unreasonable_prices)}")
+                    issues_found.append(f"'{col}'列有 {len(unreasonable_prices)} 行可疑价格")
+    
+    # 检查成交量的合理性
+    if 'volume' in df.columns:
+        unreasonable_volume = df[df['volume'] < 0].index
+        if not unreasonable_volume.empty:
+            print(f"  'volume'列中存在可疑的成交量数据，行数: {len(unreasonable_volume)}")
+            issues_found.append(f"'volume'列有 {len(unreasonable_volume)} 行可疑成交量")
+    
+    # 检查高低价的合理性
+    price_issues = df[(df['low'] > df['high']) | (df['open'] > df['high']) | (df['open'] < df['low']) |
+                      (df['close'] > df['high']) | (df['close'] < df['low'])]
+    if not price_issues.empty:
+        print(f"  存在价格数据不一致的行，行数: {len(price_issues)}")
+        for index, row in price_issues.iterrows():
+            print(f"    日期时间: {row['day']}, 开盘: {row['open']}, 最高: {row['high']}, 最低: {row['low']}, 收盘: {row['close']}")
+        issues_found.append(f"有 {len(price_issues)} 行价格数据不一致")
+    
+    return issues_found
+
+def print_summary(df, issues_found, period_name):
+    print("\n检查状态汇总:")
+    if issues_found:
+        print("发现以下问题:")
+        for issue in issues_found:
+            print(f"- {issue}")
+    else:
+        print("未发现任何问题，数据完整性良好。")
+    
+    print("\n检查内容汇总:")
+    print(f"- 总行数: {len(df)}")
+    print(f"- 日期范围: 从 {df['day'].min()} 到 {df['day'].max()}")
+    print(f"- 检查的列: {', '.join(df.columns)}")
+    if period_name in ['日线', '周线', '季线']:
+        print(f"- {period_name}数: {len(df)}")
+    else:
+        print(f"- 交易日数: {len(df['day'].dt.date.unique())}")
+    
+    print(f"\n{period_name}数据完整性检查完成。")
+
 def check_daily_data_integrity(file_path, holiday_file):
-    # 读取CSV文件
     df = pd.read_csv(file_path, parse_dates=['day'])
-    
-    # 加载假期数据
     holidays = load_holidays(holiday_file)
-    
-    # 按日期排序
     df = df.sort_values('day')
     
     print("检查日线数据完整性:")
@@ -33,61 +91,11 @@ def check_daily_data_integrity(file_path, holiday_file):
     else:
         print("\n1. 所有非假期工作日的数据都存在。")
     
-    # 2. 检查每个数据内容是否完整以及内容是否正确
+    # 2. 检查数据内容
     print("\n2. 检查数据内容:")
+    issues_found.extend(check_data_content(df))
     
-    # 检查列是否完整
-    expected_columns = ['day', 'open', 'high', 'low', 'close', 'volume']
-    missing_columns = set(expected_columns) - set(df.columns)
-    if missing_columns:
-        print(f"   缺失列: {', '.join(missing_columns)}")
-        issues_found.append(f"缺失 {len(missing_columns)} 列")
-    
-    # 检查数值列的有效性
-    numeric_columns = ['open', 'high', 'low', 'close', 'volume']
-    for col in numeric_columns:
-        if col in df.columns:
-            invalid_rows = df[~df[col].apply(lambda x: isinstance(x, (int, float)))].index
-            if not invalid_rows.empty:
-                print(f"   '{col}'列中存在无效数据，行数: {len(invalid_rows)}")
-                issues_found.append(f"'{col}'列有 {len(invalid_rows)} 行无效数据")
-            
-            # 检查价格数据的合理性
-            if col != 'volume':
-                unreasonable_prices = df[(df[col] <= 0) | (df[col] > 1000)].index
-                if not unreasonable_prices.empty:
-                    print(f"   '{col}'列中存在可疑的价格数据，行数: {len(unreasonable_prices)}")
-                    issues_found.append(f"'{col}'列有 {len(unreasonable_prices)} 行可疑价格")
-    
-    # 检查成交量的合理性
-    if 'volume' in df.columns:
-        unreasonable_volume = df[df['volume'] <= 0].index
-        if not unreasonable_volume.empty:
-            print(f"   'volume'列中存在可疑的成交量数据，行数: {len(unreasonable_volume)}")
-            issues_found.append(f"'volume'列有 {len(unreasonable_volume)} 行可疑成交量")
-    
-    # 检查高低价的合理性
-    price_issues = df[(df['low'] > df['high']) | (df['open'] > df['high']) | (df['open'] < df['low']) |
-                      (df['close'] > df['high']) | (df['close'] < df['low'])]
-    if not price_issues.empty:
-        print(f"   存在价格数据不一致的行，行数: {len(price_issues)}")
-        issues_found.append(f"有 {len(price_issues)} 行价格数据不一致")
-    
-    print("\n检查状态汇总:")
-    if issues_found:
-        print("发现以下问题:")
-        for issue in issues_found:
-            print(f"- {issue}")
-    else:
-        print("未发现任何问题，数据完整性良好。")
-    
-    print("\n检查内容汇总:")
-    print(f"- 总行数: {len(df)}")
-    print(f"- 日期范围: 从 {df['day'].min().date()} 到 {df['day'].max().date()}")
-    print(f"- 检查的列: {', '.join(df.columns)}")
-    print(f"- 已考虑的法定假期数: {len(holidays)}")
-    
-    print("\n日线数据完整性检查完成。")
+    print_summary(df, issues_found, "日线")
 
 def get_last_trading_day_of_week(date, holidays):
     for i in range(4, -1, -1):
@@ -148,60 +156,9 @@ def check_weekly_data_integrity(file_path, holiday_file):
     
     # 3. 检查数据内容
     print("\n3. 检查数据内容:")
+    issues_found.extend(check_data_content(df))
     
-    # 检查列是否完整
-    expected_columns = ['day', 'open', 'high', 'low', 'close', 'volume']
-    missing_columns = set(expected_columns) - set(df.columns)
-    if missing_columns:
-        print(f"  缺失列: {', '.join(missing_columns)}")
-        issues_found.append(f"缺失 {len(missing_columns)} 列")
-    
-    # 检查数值列的有效性和合理性
-    numeric_columns = ['open', 'high', 'low', 'close', 'volume']
-    for col in numeric_columns:
-        if col in df.columns:
-            invalid_rows = df[~df[col].apply(lambda x: isinstance(x, (int, float)))].index
-            if not invalid_rows.empty:
-                print(f"  '{col}'列中存在无效数据，行数: {len(invalid_rows)}")
-                issues_found.append(f"'{col}'列有 {len(invalid_rows)} 行无效数据")
-            
-            if col != 'volume':
-                unreasonable_prices = df[(df[col] <= 0) | (df[col] > 1000)].index
-                if not unreasonable_prices.empty:
-                    print(f"  '{col}'列中存在可疑的价格数据，行数: {len(unreasonable_prices)}")
-                    issues_found.append(f"'{col}'列有 {len(unreasonable_prices)} 行可疑价格")
-    
-    # 检查成交量的合理性
-    if 'volume' in df.columns:
-        unreasonable_volume = df[df['volume'] <= 0].index
-        if not unreasonable_volume.empty:
-            print(f"  'volume'列中存在可疑的成交量数据，行数: {len(unreasonable_volume)}")
-            issues_found.append(f"'volume'列有 {len(unreasonable_volume)} 行可疑成交量")
-    
-    # 检查高低价的合理性
-    price_issues = df[(df['low'] > df['high']) | (df['open'] > df['high']) | (df['open'] < df['low']) |
-                      (df['close'] > df['high']) | (df['close'] < df['low'])]
-    if not price_issues.empty:
-        print(f"  存在价格数据不一致的行，行数: {len(price_issues)}")
-        for index, row in price_issues.iterrows():
-            print(f"    日期: {row['day'].date()}, 开盘: {row['open']}, 最高: {row['high']}, 最低: {row['low']}, 收盘: {row['close']}")
-        issues_found.append(f"有 {len(price_issues)} 行价格数据不一致")
-    
-    print("\n检查状态汇总:")
-    if issues_found:
-        print("发现以下问题:")
-        for issue in issues_found:
-            print(f"- {issue}")
-    else:
-        print("未发现任何问题，数据完整性良好。")
-    
-    print("\n检查内容汇总:")
-    print(f"- 总行数: {len(df)}")
-    print(f"- 日期范围: 从 {df['day'].min().date()} 到 {df['day'].max().date()}")
-    print(f"- 检查的列: {', '.join(df.columns)}")
-    print(f"- 周数: {len(df)}")
-    
-    print("\n周线数据完整性检查完成。")
+    print_summary(df, issues_found, "周线")
 
 def get_last_trading_day_of_quarter(date, holidays):
     quarter_end = pd.Timestamp(date).to_period('Q').end_time.date()
@@ -265,71 +222,19 @@ def check_quarterly_data_integrity(file_path, holiday_file):
 
     # 3. 检查数据内容
     print("\n3. 检查数据内容:")
+    issues_found.extend(check_data_content(df))
     
-    # 检查列是否完整
-    expected_columns = ['day', 'open', 'high', 'low', 'close', 'volume']
-    missing_columns = set(expected_columns) - set(df.columns)
-    if missing_columns:
-        print(f"  缺失列: {', '.join(missing_columns)}")
-        issues_found.append(f"缺失 {len(missing_columns)} 列")
-    
-    # 检查数值列的有效性和合理性
-    numeric_columns = ['open', 'high', 'low', 'close', 'volume']
-    for col in numeric_columns:
-        if col in df.columns:
-            invalid_rows = df[~df[col].apply(lambda x: isinstance(x, (int, float)))].index
-            if not invalid_rows.empty:
-                print(f"  '{col}'列中存在无效数据，行数: {len(invalid_rows)}")
-                issues_found.append(f"'{col}'列有 {len(invalid_rows)} 行无效数据")
-            
-            if col != 'volume':
-                unreasonable_prices = df[(df[col] <= 0) | (df[col] > 1000)].index
-                if not unreasonable_prices.empty:
-                    print(f"  '{col}'列中存在可疑的价格数据，行数: {len(unreasonable_prices)}")
-                    issues_found.append(f"'{col}'列有 {len(unreasonable_prices)} 行可疑价格")
-    
-    # 检查成交量的合理性
-    if 'volume' in df.columns:
-        unreasonable_volume = df[df['volume'] <= 0].index
-        if not unreasonable_volume.empty:
-            print(f"  'volume'列中存在可疑的成交量数据，行数: {len(unreasonable_volume)}")
-            issues_found.append(f"'volume'列有 {len(unreasonable_volume)} 行可疑成交量")
-    
-    # 检查高低价的合理性
-    price_issues = df[(df['low'] > df['high']) | (df['open'] > df['high']) | (df['open'] < df['low']) |
-                      (df['close'] > df['high']) | (df['close'] < df['low'])]
-    if not price_issues.empty:
-        print(f"  存在价格数据不一致的行，行数: {len(price_issues)}")
-        for index, row in price_issues.iterrows():
-            print(f"    日期: {row['day'].date()}, 开盘: {row['open']}, 最高: {row['high']}, 最低: {row['low']}, 收盘: {row['close']}")
-        issues_found.append(f"有 {len(price_issues)} 行价格数据不一致")
-    
-    print("\n检查状态汇总:")
-    if issues_found:
-        print("发现以下问题:")
-        for issue in issues_found:
-            print(f"- {issue}")
-    else:
-        print("未发现任何问题，数据完整性良好。")
-    
-    print("\n检查内容汇总:")
-    print(f"- 总行数: {len(df)}")
-    print(f"- 日期范围: 从 {df['day'].min().date()} 到 {df['day'].max().date()}")
-    print(f"- 检查的列: {', '.join(df.columns)}")
-    print(f"- 季度数: {len(df)}")
-    
-    print("\n季线数据完整性检查完成。")
+    print_summary(df, issues_found, "季线")
 
-def check_60min_data_integrity(file_path, holiday_file):
+def check_intraday_data_integrity(file_path, holiday_file, period_name, trading_hours):
     df = pd.read_csv(file_path, parse_dates=['day'])
     holidays = load_holidays(holiday_file)
     df = df.sort_values('day')
     
-    print("检查60分钟线数据完整性:")
+    print(f"检查{period_name}数据完整性:")
     issues_found = []
     
     # 1. 检查交易时间段是否完整
-    trading_hours = ['10:30', '11:30', '14:00', '15:00']
     for date, group in df.groupby(df['day'].dt.date):
         if date.weekday() < 5 and date not in holidays:  # 工作日且非节假日
             times = group['day'].dt.strftime('%H:%M').tolist()
@@ -340,148 +245,22 @@ def check_60min_data_integrity(file_path, holiday_file):
     
     # 2. 检查数据内容
     print("\n2. 检查数据内容:")
+    issues_found.extend(check_data_content(df))
     
-    # 检查列是否完整
-    expected_columns = ['day', 'open', 'high', 'low', 'close', 'volume']
-    missing_columns = set(expected_columns) - set(df.columns)
-    if missing_columns:
-        print(f"  缺失列: {', '.join(missing_columns)}")
-        issues_found.append(f"缺失 {len(missing_columns)} 列")
-    
-    # 检查数值列的有效性和合理性
-    numeric_columns = ['open', 'high', 'low', 'close', 'volume']
-    for col in numeric_columns:
-        if col in df.columns:
-            invalid_rows = df[~df[col].apply(lambda x: isinstance(x, (int, float)))].index
-            if not invalid_rows.empty:
-                print(f"  '{col}'列中存在无效数据，行数: {len(invalid_rows)}")
-                issues_found.append(f"'{col}'列有 {len(invalid_rows)} 行无效数据")
-            
-            if col != 'volume':
-                unreasonable_prices = df[(df[col] <= 0) | (df[col] > 1000)].index
-                if not unreasonable_prices.empty:
-                    print(f"  '{col}'列中存在可疑的价格数据，行数: {len(unreasonable_prices)}")
-                    issues_found.append(f"'{col}'列有 {len(unreasonable_prices)} 行可疑价格")
-    
-    # 检查成交量的合理性
-    if 'volume' in df.columns:
-        unreasonable_volume = df[df['volume'] < 0].index
-        if not unreasonable_volume.empty:
-            print(f"  'volume'列中存在可疑的成交量数据，行数: {len(unreasonable_volume)}")
-            issues_found.append(f"'volume'列有 {len(unreasonable_volume)} 行可疑成交量")
-    
-    # 检查高低价的合理性
-    price_issues = df[(df['low'] > df['high']) | (df['open'] > df['high']) | (df['open'] < df['low']) |
-                      (df['close'] > df['high']) | (df['close'] < df['low'])]
-    if not price_issues.empty:
-        print(f"  存在价格数据不一致的行，行数: {len(price_issues)}")
-        for index, row in price_issues.iterrows():
-            print(f"    日期时间: {row['day']}, 开盘: {row['open']}, 最高: {row['high']}, 最低: {row['low']}, 收盘: {row['close']}")
-        issues_found.append(f"有 {len(price_issues)} 行价格数据不一致")
-    
-    print("\n检查状态汇总:")
-    if issues_found:
-        print("发现以下问题:")
-        for issue in issues_found:
-            print(f"- {issue}")
-    else:
-        print("未发现任何问题，数据完整性良好。")
-    
-    print("\n检查内容汇总:")
-    print(f"- 总行数: {len(df)}")
-    print(f"- 日期范围: 从 {df['day'].min()} 到 {df['day'].max()}")
-    print(f"- 检查的列: {', '.join(df.columns)}")
-    print(f"- 交易日数: {len(df['day'].dt.date.unique())}")
-    
-    print("\n60分钟线数据完整性检查完成。")
+    print_summary(df, issues_found, period_name)
+
+def check_60min_data_integrity(file_path, holiday_file):
+    trading_hours = ['10:30', '11:30', '14:00', '15:00']
+    check_intraday_data_integrity(file_path, holiday_file, "60分钟线", trading_hours)
 
 def check_15min_data_integrity(file_path, holiday_file):
-    df = pd.read_csv(file_path, parse_dates=['day'])
-    holidays = load_holidays(holiday_file)
-    df = df.sort_values('day')
-    
-    print("检查15分钟线数据完整性:")
-    issues_found = []
-    
-    # 1. 检查交易时间段是否完整
     trading_hours = [
         '09:45', '10:00', '10:15', '10:30', '10:45', '11:00', '11:15', '11:30',
         '13:15', '13:30', '13:45', '14:00', '14:15', '14:30', '14:45', '15:00'
     ]
-    for date, group in df.groupby(df['day'].dt.date):
-        if date.weekday() < 5 and date not in holidays:  # 工作日且非节假日
-            times = group['day'].dt.strftime('%H:%M').tolist()
-            missing_times = set(trading_hours) - set(times)
-            if missing_times:
-                print(f"日期 {date} 缺少以下时间段: {', '.join(missing_times)}")
-                issues_found.append(f"日期 {date} 缺少 {len(missing_times)} 个时间段")
-    
-    # 2. 检查数据内容
-    print("\n2. 检查数据内容:")
-    
-    # 检查列是否完整
-    expected_columns = ['day', 'open', 'high', 'low', 'close', 'volume']
-    missing_columns = set(expected_columns) - set(df.columns)
-    if missing_columns:
-        print(f"  缺失列: {', '.join(missing_columns)}")
-        issues_found.append(f"缺失 {len(missing_columns)} 列")
-    
-    # 检查数值列的有效性和合理性
-    numeric_columns = ['open', 'high', 'low', 'close', 'volume']
-    for col in numeric_columns:
-        if col in df.columns:
-            invalid_rows = df[~df[col].apply(lambda x: isinstance(x, (int, float)))].index
-            if not invalid_rows.empty:
-                print(f"  '{col}'列中存在无效数据，行数: {len(invalid_rows)}")
-                issues_found.append(f"'{col}'列有 {len(invalid_rows)} 行无效数据")
-            
-            if col != 'volume':
-                unreasonable_prices = df[(df[col] <= 0) | (df[col] > 1000)].index
-                if not unreasonable_prices.empty:
-                    print(f"  '{col}'列中存在可疑的价格数据，行数: {len(unreasonable_prices)}")
-                    issues_found.append(f"'{col}'列有 {len(unreasonable_prices)} 行可疑价格")
-    
-    # 检查成交量的合理性
-    if 'volume' in df.columns:
-        unreasonable_volume = df[df['volume'] < 0].index
-        if not unreasonable_volume.empty:
-            print(f"  'volume'列中存在可疑的成交量数据，行数: {len(unreasonable_volume)}")
-            issues_found.append(f"'volume'列有 {len(unreasonable_volume)} 行可疑成交量")
-    
-    # 检查高低价的合理性
-    price_issues = df[(df['low'] > df['high']) | (df['open'] > df['high']) | (df['open'] < df['low']) |
-                      (df['close'] > df['high']) | (df['close'] < df['low'])]
-    if not price_issues.empty:
-        print(f"  存在价格数据不一致的行，行数: {len(price_issues)}")
-        for index, row in price_issues.iterrows():
-            print(f"    日期时间: {row['day']}, 开盘: {row['open']}, 最高: {row['high']}, 最低: {row['low']}, 收盘: {row['close']}")
-        issues_found.append(f"有 {len(price_issues)} 行价格数据不一致")
-    
-    print("\n检查状态汇总:")
-    if issues_found:
-        print("发现以下问题:")
-        for issue in issues_found:
-            print(f"- {issue}")
-    else:
-        print("未发现任何问题，数据完整性良好。")
-    
-    print("\n检查内容汇总:")
-    print(f"- 总行数: {len(df)}")
-    print(f"- 日期范围: 从 {df['day'].min()} 到 {df['day'].max()}")
-    print(f"- 检查的列: {', '.join(df.columns)}")
-    print(f"- 交易日数: {len(df['day'].dt.date.unique())}")
-    
-    print("\n15分钟线数据完整性检查完成。")
+    check_intraday_data_integrity(file_path, holiday_file, "15分钟线", trading_hours)
 
 def check_5min_data_integrity(file_path, holiday_file):
-    df = pd.read_csv(file_path, parse_dates=['day'])
-    holidays = load_holidays(holiday_file)
-    df = df.sort_values('day')
-    
-    print("检查5分钟线数据完整性:")
-    issues_found = []
-    
-    # 1. 检查交易时间段是否完整
     trading_hours = [
         '09:35', '09:40', '09:45', '09:50', '09:55',
         '10:00', '10:05', '10:10', '10:15', '10:20', '10:25', '10:30', '10:35', '10:40', '10:45', '10:50', '10:55',
@@ -490,70 +269,7 @@ def check_5min_data_integrity(file_path, holiday_file):
         '14:00', '14:05', '14:10', '14:15', '14:20', '14:25', '14:30', '14:35', '14:40', '14:45', '14:50', '14:55',
         '15:00'
     ]
-    for date, group in df.groupby(df['day'].dt.date):
-        if date.weekday() < 5 and date not in holidays:  # 工作日且非节假日
-            times = group['day'].dt.strftime('%H:%M').tolist()
-            missing_times = set(trading_hours) - set(times)
-            if missing_times:
-                print(f"日期 {date} 缺少以下时间段: {', '.join(missing_times)}")
-                issues_found.append(f"日期 {date} 缺少 {len(missing_times)} 个时间段")
-    
-    # 2. 检查数据内容
-    print("\n2. 检查数据内容:")
-    
-    # 检查列是否完整
-    expected_columns = ['day', 'open', 'high', 'low', 'close', 'volume']
-    missing_columns = set(expected_columns) - set(df.columns)
-    if missing_columns:
-        print(f"  缺失列: {', '.join(missing_columns)}")
-        issues_found.append(f"缺失 {len(missing_columns)} 列")
-    
-    # 检查数值列的有效性和合理性
-    numeric_columns = ['open', 'high', 'low', 'close', 'volume']
-    for col in numeric_columns:
-        if col in df.columns:
-            invalid_rows = df[~df[col].apply(lambda x: isinstance(x, (int, float)))].index
-            if not invalid_rows.empty:
-                print(f"  '{col}'列中存在无效数据，行数: {len(invalid_rows)}")
-                issues_found.append(f"'{col}'列有 {len(invalid_rows)} 行无效数据")
-            
-            if col != 'volume':
-                unreasonable_prices = df[(df[col] <= 0) | (df[col] > 1000)].index
-                if not unreasonable_prices.empty:
-                    print(f"  '{col}'列中存在可疑的价格数据，行数: {len(unreasonable_prices)}")
-                    issues_found.append(f"'{col}'列有 {len(unreasonable_prices)} 行可疑价格")
-    
-    # 检查成交量的合理性
-    if 'volume' in df.columns:
-        unreasonable_volume = df[df['volume'] < 0].index
-        if not unreasonable_volume.empty:
-            print(f"  'volume'列中存在可疑的成交量数据，行数: {len(unreasonable_volume)}")
-            issues_found.append(f"'volume'列有 {len(unreasonable_volume)} 行可疑成交量")
-    
-    # 检查高低价的合理性
-    price_issues = df[(df['low'] > df['high']) | (df['open'] > df['high']) | (df['open'] < df['low']) |
-                      (df['close'] > df['high']) | (df['close'] < df['low'])]
-    if not price_issues.empty:
-        print(f"  存在价格数据不一致的行，行数: {len(price_issues)}")
-        for index, row in price_issues.iterrows():
-            print(f"    日期时间: {row['day']}, 开盘: {row['open']}, 最高: {row['high']}, 最低: {row['low']}, 收盘: {row['close']}")
-        issues_found.append(f"有 {len(price_issues)} 行价格数据不一致")
-    
-    print("\n检查状态汇总:")
-    if issues_found:
-        print("发现以下问题:")
-        for issue in issues_found:
-            print(f"- {issue}")
-    else:
-        print("未发现任何问题，数据完整性良好。")
-    
-    print("\n检查内容汇总:")
-    print(f"- 总行数: {len(df)}")
-    print(f"- 日期范围: 从 {df['day'].min()} 到 {df['day'].max()}")
-    print(f"- 检查的列: {', '.join(df.columns)}")
-    print(f"- 交易日数: {len(df['day'].dt.date.unique())}")
-    
-    print("\n5分钟线数据完整性检查完成。")
+    check_intraday_data_integrity(file_path, holiday_file, "5分钟线", trading_hours)
 
 # 测试函数
 def test_data_integrity():
