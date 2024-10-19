@@ -33,7 +33,7 @@ class StockDataFetcher:
         """Create and process a DataFrame from the fetched data"""
         df = pd.DataFrame(data, columns=columns)
         for col in df.columns:
-            if col != 'time' and col != 'day':
+            if col not in ['time', 'day']:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
         df['time'] = pd.to_datetime(df['time'] if 'time' in df.columns else df['day'])
         df.set_index('time', inplace=True)
@@ -46,7 +46,7 @@ class TencentDataFetcher(StockDataFetcher):
     @staticmethod
     def get_price_day(code: str, end_date: str = '', count: int = 10, frequency: str = '1d') -> pd.DataFrame:
         """Fetch daily price data from Tencent"""
-        unit = 'week' if frequency == '1w' else 'month' if frequency == '1m' else 'quarter' if frequency == '1q' else 'day'
+        unit = 'week' if frequency == '1w' else 'month' if frequency == '1m' else 'day'
         end_date = TencentDataFetcher.process_end_date(end_date)
         end_date = '' if end_date == datetime.now().strftime('%Y-%m-%d') else end_date
 
@@ -109,12 +109,12 @@ class SinaDataFetcher(StockDataFetcher):
     @staticmethod
     def get_price(code: str, end_date: str = '', count: int = 10, frequency: str = '60m') -> pd.DataFrame:
         """Fetch price data from Sina"""
-        frequency = frequency.replace('1d', '240m').replace('1w', '1200m').replace('1m', '7200m').replace('1q', '21600m')
+        frequency = frequency.replace('1d', '240m').replace('1w', '1200m').replace('1m', '7200m')
         ts = int(frequency[:-1]) if frequency[:-1].isdigit() else 1
         
-        if end_date and frequency in ['240m', '1200m', '7200m', '21600m']:
+        if end_date and frequency in ['240m', '1200m', '7200m']:
             end_date = pd.to_datetime(end_date) if not isinstance(end_date, date) else end_date
-            unit = 4 if frequency == '1200m' else 29 if frequency == '7200m' else 90 if frequency == '21600m' else 1
+            unit = 4 if frequency == '1200m' else 29 if frequency == '7200m' else 1
             count += (datetime.now() - end_date).days // unit
 
         url = f'http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={code}&scale={ts}&ma=5&datalen={count}'
@@ -128,7 +128,7 @@ class SinaDataFetcher(StockDataFetcher):
                 logger.warning(f"No data received from Sina for {code} with frequency {frequency}")
                 return pd.DataFrame()
             df = SinaDataFetcher.create_dataframe(data, ['day', 'open', 'high', 'low', 'close', 'volume'])
-            if end_date and frequency in ['240m', '1200m', '7200m', '21600m']:
+            if end_date and frequency in ['240m', '1200m', '7200m']:
                 df = df[df.index <= end_date].tail(count)
             logger.info(f"Successfully fetched {len(df)} rows of {frequency} data for {code}")
             return df
@@ -150,37 +150,31 @@ def get_price(code: str, end_date: str = '', count: int = 10, frequency: str = '
 
     logger.info(f"Attempting to fetch {frequency} data for {xcode}")
 
-    if frequency in ['1d', '1w', '1m', '1q']:
+    if frequency in ['1d', '1w', '1m']:
         try:
             logger.info(f"Trying Sina for {frequency} data")
-            df = SinaDataFetcher.get_price(xcode, end_date=end_date, count=count, frequency=frequency)
-            if df.empty and frequency == '1q':
-                logger.info(f"No quarterly data from Sina, trying Tencent for {frequency} data")
-                df = TencentDataFetcher.get_price_day(xcode, end_date=end_date, count=count, frequency=frequency)
-            if df.empty and frequency == '1q':
-                logger.info(f"No quarterly data from Tencent, falling back to monthly data")
-                monthly_df = get_price(xcode, end_date=end_date, count=count*3, frequency='1m')  # Fetch 3 times more monthly data
-                if monthly_df is not None and not monthly_df.empty:
-                    df = monthly_df.resample('Q').last()  # Resample to quarterly data
-                    logger.info(f"Successfully resampled monthly data to quarterly, got {len(df)} rows")
-                else:
-                    logger.warning(f"Failed to fetch monthly data for {xcode}")
-            return df
+            return SinaDataFetcher.get_price(xcode, end_date=end_date, count=count, frequency=frequency)
         except Exception as e:
-            logger.warning(f"Failed to fetch data from Sina and Tencent: {e}")
-            if frequency == '1q':
-                logger.info(f"Falling back to monthly data for quarterly")
-                try:
-                    monthly_df = get_price(xcode, end_date=end_date, count=count*3, frequency='1m')  # Fetch 3 times more monthly data
-                    if monthly_df is not None and not monthly_df.empty:
-                        df = monthly_df.resample('Q').last()  # Resample to quarterly data
-                        logger.info(f"Successfully resampled monthly data to quarterly, got {len(df)} rows")
-                        return df
-                    else:
-                        logger.warning(f"Failed to fetch monthly data for {xcode}")
-                except Exception as e:
-                    logger.error(f"Error while fetching monthly data: {e}")
-            logger.error(f"All attempts to fetch data failed for {xcode} with frequency {frequency}")
+            logger.warning(f"Failed to fetch data from Sina, trying Tencent: {e}")
+            try:
+                return TencentDataFetcher.get_price_day(xcode, end_date=end_date, count=count, frequency=frequency)
+            except Exception as e:
+                logger.error(f"Failed to fetch data from Tencent: {e}")
+                return pd.DataFrame()
+
+    if frequency == '1q':
+        try:
+            logger.info("Fetching monthly data for quarterly resampling")
+            monthly_df = get_price(xcode, end_date=end_date, count=count*3, frequency='1m')
+            if monthly_df is not None and not monthly_df.empty:
+                df = monthly_df.resample('Q').last()
+                logger.info(f"Successfully resampled monthly data to quarterly, got {len(df)} rows")
+                return df
+            else:
+                logger.warning(f"Failed to fetch monthly data for {xcode}")
+                return pd.DataFrame()
+        except Exception as e:
+            logger.error(f"Error while fetching or resampling data for quarterly frequency: {e}")
             return pd.DataFrame()
 
     if frequency in ['5m', '15m', '30m', '60m']:
@@ -203,11 +197,14 @@ if __name__ == '__main__':
     df = get_price('000001.XSHG', frequency='15m', count=10)
     print('上证指数分钟线\n', df)
 
-    df = get_price('000001.XSHG', end_date='2024-09-30', frequency='5m', count=10)
+    df = get_price('000001.XSHG', end_date='2024-09-30', frequency='60m', count=10)
     print('上证指数分钟线\n', df)
     
     df = get_price('sh000001', frequency='1w', count=10)
     print('上证指数周线行情\n', df)
+    
+    df = get_price('sh000001', frequency='1m', count=10)
+    print('上证指数月线行情\n', df)
 
     df = get_price('sh000001', frequency='1q', count=10)
     print('上证指数季度线行情\n', df)

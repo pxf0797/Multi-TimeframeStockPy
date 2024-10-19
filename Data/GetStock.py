@@ -39,14 +39,7 @@ class GetStock:
 
             logger.info(f"Attempting to fetch {frequency} data for {self.__stock_name}")
             
-            if frequency == '1q':
-                # For quarterly data, fetch monthly data and resample
-                self.__df = get_price(self.__stock_name, frequency='1m', count=count*3, end_date=end_date)
-                if not self.__df.empty:
-                    self.__df = self.__df.resample('QE').last()
-                    logger.info(f"Successfully resampled monthly data to quarterly for {self.__stock_name}")
-            else:
-                self.__df = get_price(self.__stock_name, frequency=frequency, count=count, end_date=end_date)
+            self.__df = get_price(self.__stock_name, frequency=frequency, count=count, end_date=end_date)
 
             if self.__df.empty:
                 logger.warning(f"No data retrieved for {self.__stock_name} with frequency {frequency}")
