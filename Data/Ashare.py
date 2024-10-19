@@ -2,6 +2,7 @@
 """
 Ashare 股票行情数据双核心版 (https://github.com/mpquant/Ashare)
 Optimized and restructured version
+tushare 1b298c8f2a7b7a0c929ae7552434213df054ab4fb49cb7676d14e0f9
 """
 
 import json
@@ -50,6 +51,7 @@ class TencentDataFetcher(StockDataFetcher):
         end_date = '' if end_date == datetime.now().strftime('%Y-%m-%d') else end_date
 
         url = f'http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={code},{unit},,{end_date},{count},qfq'
+        logger.info(f"url info: {url}")
         try:
             response = requests.get(url)
             response.raise_for_status()
@@ -130,13 +132,22 @@ def get_price(code: str, end_date: str = '', count: int = 10, frequency: str = '
             logger.warning(f"Failed to fetch data from Sina, trying Tencent: {e}")
             return TencentDataFetcher.get_price_min(xcode, end_date=end_date, count=count, frequency=frequency)
 
+def test_tx_get_price(code: str, end_date: str = '', count: int = 10, frequency: str = '1d', fields: list = []) -> pd.DataFrame:
+    """Main function to get stock price data"""
+    xcode = code.replace('.XSHG', '').replace('.XSHE', '')
+    xcode = f"sh{xcode}" if 'XSHG' in code else f"sz{xcode}" if 'XSHE' in code else code
+    return TencentDataFetcher.get_price_day(xcode, end_date=end_date, count=count, frequency=frequency)
+
 if __name__ == '__main__':
     # Test cases
-    df = get_price('sh000001', frequency='1d', count=10)
+    '''df = get_price('sh000001', frequency='1d', count=10)
     print('上证指数日线行情\n', df)
 
     df = get_price('000001.XSHG', frequency='15m', count=10)
     print('上证指数分钟线\n', df)
 
     df = get_price('000001.XSHG', end_date='2024-09-30', frequency='5m', count=10)
-    print('上证指数分钟线\n', df)
+    print('上证指数分钟线\n', df)'''
+    
+    df = test_tx_get_price('sh000001', frequency='1w', count=100)
+    print('上证指数日线行情\n', df)
