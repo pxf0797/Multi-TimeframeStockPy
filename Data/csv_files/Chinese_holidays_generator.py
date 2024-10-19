@@ -6,15 +6,29 @@ import time
 import re
 
 def parse_date(date_str, year):
+    """
+    Parse a date string into a datetime.date object.
+    
+    This function attempts to parse the date string using various common formats.
+    If all attempts fail, it tries to parse the string as a full date (YYYY-MM-DD).
+    
+    Args:
+    date_str (str): The date string to parse.
+    year (int): The year to use if the date string doesn't include a year.
+    
+    Returns:
+    datetime.date: The parsed date, or None if parsing fails.
+    """
     date_formats = [
-        "%d %b",      # 例如 "01 Jan"
-        "%b %d",      # 例如 "Jan 01"
-        "%d %B",      # 例如 "01 January"
-        "%B %d",      # 例如 "January 01"
-        "%d.%m",      # 例如 "01.01"
-        "%m.%d"       # 例如 "01.01"
+        "%d %b",      # e.g., "01 Jan"
+        "%b %d",      # e.g., "Jan 01"
+        "%d %B",      # e.g., "01 January"
+        "%B %d",      # e.g., "January 01"
+        "%d.%m",      # e.g., "01.01"
+        "%m.%d"       # e.g., "01.01"
     ]
     
+    # Try parsing with each format
     for date_format in date_formats:
         try:
             date = datetime.strptime(f"{year} {date_str}", f"%Y {date_format}").date()
@@ -22,15 +36,27 @@ def parse_date(date_str, year):
         except ValueError:
             continue
     
-    # 如果上面的格式都不匹配，尝试直接解析完整的日期字符串
+    # If none of the above formats work, try parsing as a full date string
     try:
         return datetime.strptime(date_str, "%Y-%m-%d").date()
     except ValueError:
-        print(f"  无法解析日期: {date_str}")
+        print(f"  Unable to parse date: {date_str}")
         return None
 
 def fetch_holidays_from_web(year):
-    print(f"正在从网络获取 {year} 年的假期数据...")
+    """
+    Fetch holiday data for a specific year from a web source.
+    
+    This function attempts to scrape holiday data from officeholidays.com.
+    If successful, it returns a list of holiday dates for the given year.
+    
+    Args:
+    year (int): The year for which to fetch holiday data.
+    
+    Returns:
+    list: A list of datetime.date objects representing holidays, or an empty list if fetching fails.
+    """
+    print(f"Fetching holiday data for {year} from the web...")
     url = f"https://www.officeholidays.com/countries/china/{year}"
     try:
         response = requests.get(url)
@@ -41,7 +67,7 @@ def fetch_holidays_from_web(year):
         table = soup.find('table', class_='country-table')
         if table:
             rows = table.find_all('tr')
-            for row in rows[1:]:
+            for row in rows[1:]:  # Skip the header row
                 cells = row.find_all('td')
                 if len(cells) >= 2:
                     date_str = cells[1].text.strip()
@@ -50,75 +76,98 @@ def fetch_holidays_from_web(year):
                         holidays.append(date)
         
         if holidays:
-            print(f"  成功获取到 {len(holidays)} 个假期日期")
+            print(f"  Successfully retrieved {len(holidays)} holiday dates")
         else:
-            print("  未能从网络获取到假期数据")
+            print("  Failed to retrieve holiday data from the web")
         return holidays
     except requests.RequestException as e:
-        print(f"  获取数据时出错: {e}")
+        print(f"  Error fetching data: {e}")
         return []
 
 def generate_default_holidays(year):
-    print(f"正在生成 {year} 年的默认假期数据...")
+    """
+    Generate a list of default holiday dates for a given year.
+    
+    This function creates a basic list of Chinese holidays based on fixed dates.
+    Note that some holidays (like Spring Festival) are actually based on the lunar calendar,
+    so this is a simplified approximation.
+    
+    Args:
+    year (int): The year for which to generate default holidays.
+    
+    Returns:
+    list: A list of datetime.date objects representing default holidays.
+    """
+    print(f"Generating default holiday data for {year}...")
     holidays = []
     
-    # 新年
+    # New Year's Day
     holidays.append(datetime(year, 1, 1).date())
     
-    # 春节（简化为固定日期，实际上是农历）
+    # Spring Festival (simplified as fixed dates, actually based on lunar calendar)
     for i in range(1, 8):
         holidays.append(datetime(year, 2, i).date())
     
-    # 清明节（简化为固定日期）
+    # Qingming Festival (simplified as fixed date)
     holidays.append(datetime(year, 4, 5).date())
     
-    # 劳动节
+    # Labor Day
     holidays.append(datetime(year, 5, 1).date())
     
-    # 端午节（简化为固定日期）
+    # Dragon Boat Festival (simplified as fixed date)
     holidays.append(datetime(year, 6, 5).date())
     
-    # 中秋节（简化为固定日期）
+    # Mid-Autumn Festival (simplified as fixed date)
     holidays.append(datetime(year, 9, 15).date())
     
-    # 国庆节
+    # National Day
     for i in range(1, 8):
         holidays.append(datetime(year, 10, i).date())
     
-    print(f"  已生成 {len(holidays)} 个默认假期日期")
+    print(f"  Generated {len(holidays)} default holiday dates")
     return holidays
 
 def generate_chinese_holidays(start_year=1991):
+    """
+    Generate a CSV file containing Chinese holiday dates from the start year to the current year.
+    
+    This function attempts to fetch holiday data from the web for each year.
+    If web fetching fails, it falls back to generating default holiday dates.
+    The resulting holidays are saved to a CSV file named 'chinese_holidays.csv'.
+    
+    Args:
+    start_year (int): The year from which to start generating holiday data. Defaults to 1991.
+    """
     end_year = datetime.now().year
-    print(f"开始生成从 {start_year} 年到 {end_year} 年的中国法定假期数据")
+    print(f"Starting to generate Chinese holiday data from {start_year} to {end_year}")
     
     all_holidays = []
     
     for year in range(start_year, end_year + 1):
-        print(f"\n处理 {year} 年的数据:")
+        print(f"\nProcessing data for {year}:")
         holidays = fetch_holidays_from_web(year)
         
         if not holidays:
-            print("  使用默认生成方法")
+            print("  Using default generation method")
             holidays = generate_default_holidays(year)
         
         all_holidays.extend(holidays)
-        time.sleep(1)  # 添加延迟以避免对服务器造成压力
+        time.sleep(1)  # Add delay to avoid putting too much pressure on the server
     
-    # 排序并去重
+    # Sort and remove duplicates
     all_holidays = sorted(list(set(all_holidays)))
     
-    # 写入CSV文件
+    # Write to CSV file
     csv_filename = 'chinese_holidays.csv'
     with open(csv_filename, 'w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(['date'])  # 写入表头
+        writer.writerow(['date'])  # Write header
         for holiday in all_holidays:
             writer.writerow([holiday.strftime("%Y-%m-%d")])
     
-    print(f"\n已生成中国法定假期CSV文件: {csv_filename}")
-    print(f"总假期数: {len(all_holidays)}")
-    print(f"数据范围: 从 {min(all_holidays)} 到 {max(all_holidays)}")
+    print(f"\nChinese holiday CSV file generated: {csv_filename}")
+    print(f"Total number of holidays: {len(all_holidays)}")
+    print(f"Date range: from {min(all_holidays)} to {max(all_holidays)}")
 
-# 生成假期文件
+# Generate the holiday file
 generate_chinese_holidays()
