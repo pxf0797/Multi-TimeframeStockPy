@@ -126,13 +126,18 @@ if __name__ == '__main__':
     #end_date = datetime.now().strftime('%Y-%m-%d')
     end_date = datetime.strptime('2024-09-15', '%Y-%m-%d')
 
-    # Test 5-minute data, only can fetch the data from now to few months age
-    start_date = (end_date - timedelta(days=7)).strftime('%Y-%m-%d')
+    # Test 5-minute data, only can fetch the data from now to few months age, 5000 about 5 months
+    start_date = (end_date - timedelta(days=1000)).strftime('%Y-%m-%d')
     df_5m = gs.get_stock_data(start_date, end_date.strftime('%Y-%m-%d'), '5m')
     print("5-minute data shape:", df_5m.shape)
+    
+    # Test 15-minute data, only can fetch the data from now to few months age, 5000 about 1 yearr
+    start_date = (end_date - timedelta(days=1000)).strftime('%Y-%m-%d')
+    df_5m = gs.get_stock_data(start_date, end_date.strftime('%Y-%m-%d'), '15m')
+    print("5-minute data shape:", df_5m.shape)
 
-    # Test 60-minute data, only can fetch the data from now to few months age
-    start_date = (end_date - timedelta(days=30)).strftime('%Y-%m-%d')
+    # Test 60-minute data, only can fetch the data from now to few years age, 2000 about 2years
+    start_date = (end_date - timedelta(days=1000)).strftime('%Y-%m-%d')
     df_60m = gs.get_stock_data(start_date, end_date.strftime('%Y-%m-%d'), '60m')
     print("60-minute data shape:", df_60m.shape)
 
