@@ -123,29 +123,30 @@ if __name__ == '__main__':
     gs.set_stock_name('sh000001')
 
     # Test the new interface
-    end_date = datetime.now().strftime('%Y-%m-%d')
+    #end_date = datetime.now().strftime('%Y-%m-%d')
+    end_date = datetime.strptime('2024-09-15', '%Y-%m-%d')
 
-    # Test 5-minute data (past week)
-    start_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
-    df_5m = gs.get_stock_data(start_date, end_date, '5m')
+    # Test 5-minute data, only can fetch the data from now to few months age
+    start_date = (end_date - timedelta(days=7)).strftime('%Y-%m-%d')
+    df_5m = gs.get_stock_data(start_date, end_date.strftime('%Y-%m-%d'), '5m')
     print("5-minute data shape:", df_5m.shape)
 
-    # Test 60-minute data (past month)
-    start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-    df_60m = gs.get_stock_data(start_date, end_date, '60m')
+    # Test 60-minute data, only can fetch the data from now to few months age
+    start_date = (end_date - timedelta(days=30)).strftime('%Y-%m-%d')
+    df_60m = gs.get_stock_data(start_date, end_date.strftime('%Y-%m-%d'), '60m')
     print("60-minute data shape:", df_60m.shape)
 
-    # Test daily data (past year)
-    start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
-    df_1d = gs.get_stock_data(start_date, end_date, '1d')
+    # Test daily data
+    start_date = (end_date - timedelta(days=365)).strftime('%Y-%m-%d')
+    df_1d = gs.get_stock_data(start_date, end_date.strftime('%Y-%m-%d'), '1d')
     print("Daily data shape:", df_1d.shape)
 
     # Test monthly data (past 5 years)
-    start_date = (datetime.now() - timedelta(days=365*5)).strftime('%Y-%m-%d')
-    df_1m = gs.get_stock_data(start_date, end_date, '1m')
+    start_date = (end_date - timedelta(days=365*5)).strftime('%Y-%m-%d')
+    df_1m = gs.get_stock_data(start_date, end_date.strftime('%Y-%m-%d'), '1m')
     print("Monthly data shape:", df_1m.shape)
 
     # Test quarterly data (past 10 years)
-    start_date = (datetime.now() - timedelta(days=365*10)).strftime('%Y-%m-%d')
-    df_1q = gs.get_stock_data(start_date, end_date, '1q')
+    start_date = (end_date - timedelta(days=365*10)).strftime('%Y-%m-%d')
+    df_1q = gs.get_stock_data(start_date, end_date.strftime('%Y-%m-%d'), '1q')
     print("Quarterly data shape:", df_1q.shape)
