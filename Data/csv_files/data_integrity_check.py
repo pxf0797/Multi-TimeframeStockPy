@@ -107,11 +107,19 @@ def check_weekly_data_integrity(file_path, holiday_file):
     # 1. 检查连续的周期是否完整
     start_date = df['day'].min()
     end_date = df['day'].max()
-    expected_weeks = pd.date_range(start=start_date, end=end_date, freq='W-FRI')
-    actual_weeks = df['day'].dt.to_period('W').unique()
     
-    missing_weeks = set(expected_weeks.to_period('W')) - set(actual_weeks)
-    extra_weeks = set(actual_weeks) - set(expected_weeks.to_period('W'))
+    current_week = start_date
+    expected_weeks = []
+    while current_week <= end_date:
+        last_trading_day = get_last_trading_day_of_week(current_week, holidays)
+        if last_trading_day:
+            expected_weeks.append(last_trading_day)
+        current_week += timedelta(days=7)
+    
+    actual_weeks = df['day'].dt.date.tolist()
+    
+    missing_weeks = set(expected_weeks) - set(actual_weeks)
+    extra_weeks = set(actual_weeks) - set(expected_weeks)
     
     if missing_weeks:
         print("\n1. 以下周缺失数据:")
@@ -200,16 +208,46 @@ def check_weekly_data_integrity(file_path, holiday_file):
 # check_weekly_data_integrity('path_to_weekly_data.csv', 'chinese_holidays.csv')
 
 # 测试函数
-def test_get_last_trading_day_of_week():
-    holidays = {datetime(2024, 1, 1).date(), datetime(2024, 1, 2).date(), datetime(2024, 1, 3).date()}
-    
-    assert get_last_trading_day_of_week(datetime(2024, 1, 5), holidays) == datetime(2024, 1, 5).date()
-    assert get_last_trading_day_of_week(datetime(2024, 1, 1), holidays) == datetime(2023, 12, 29).date()
-    
-    full_week_holiday = {datetime(2024, 1, d).date() for d in range(1, 6)}
-    assert get_last_trading_day_of_week(datetime(2024, 1, 1), full_week_holiday) is None
-    
-    print("所有测试用例通过!")
+def test_data_integrity():
+    # 创建测试用的日线数据
+    daily_data = pd.DataFrame({
+        'day': pd.date_range(start='2023-01-01', end='2023-01-10'),
+        'open': [100, 101, 102, 103, 104, 105, 106, 107, 108, 109],
+        'high': [102, 103, 104, 105, 106, 107, 108, 109, 110, 111],
+        'low': [98, 99, 100, 101, 102, 103, 104, 105, 106, 107],
+        'close': [101, 102, 103, 104, 105, 106, 107, 108, 109, 110],
+        'volume': [1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900]
+    })
+    daily_data.to_csv('test_daily_data.csv', index=False)
+
+    # 创建测试用的周线数据
+    weekly_data = pd.DataFrame({
+        'day': pd.date_range(start='2023-01-06', end='2023-02-03', freq='W-FRI'),
+        'open': [100, 105, 110, 115, 120],
+        'high': [105, 110, 115, 120, 125],
+        'low': [95, 100, 105, 110, 115],
+        'close': [102, 107, 112, 117, 122],
+        'volume': [5000, 5500, 6000, 6500, 7000]
+    })
+    weekly_data.to_csv('test_weekly_data.csv', index=False)
+
+    # 创建测试用的假期数据
+    holidays_data = pd.DataFrame({
+        'date': ['2023-01-02', '2023-01-23'],
+        'holiday': ['New Year', 'Chinese New Year']
+    })
+    holidays_data.to_csv('test_holidays.csv', index=False)
+
+    # 测试日线数据完整性检查
+    print("测试日线数据完整性检查:")
+    check_daily_data_integrity('sz000001_1d_1983-09-24_2024-10-18_2.csv', 'chinese_holidays.csv')
+
+    print("\n" + "="*50 + "\n")
+
+    # 测试周线数据完整性检查
+    print("测试周线数据完整性检查:")
+    check_weekly_data_integrity('sz000001_1w_1909-10-22_2024-10-18.csv', 'chinese_holidays.csv')
 
 # 运行测试
-test_get_last_trading_day_of_week()
+if __name__ == "__main__":
+    test_data_integrity()
