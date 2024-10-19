@@ -109,7 +109,7 @@ class SinaDataFetcher(StockDataFetcher):
     @staticmethod
     def get_price(code: str, end_date: str = '', count: int = 10, frequency: str = '60m') -> pd.DataFrame:
         """Fetch price data from Sina"""
-        frequency = frequency.replace('1d', '240m').replace('1w', '1200m').replace('1M', '7200m').replace('1q', '21600m')
+        frequency = frequency.replace('1d', '240m').replace('1w', '1200m').replace('1m', '7200m').replace('1q', '21600m')
         ts = int(frequency[:-1]) if frequency[:-1].isdigit() else 1
         
         if end_date and frequency in ['240m', '1200m', '7200m', '21600m']:
@@ -150,7 +150,7 @@ def get_price(code: str, end_date: str = '', count: int = 10, frequency: str = '
 
     logger.info(f"Attempting to fetch {frequency} data for {xcode}")
 
-    if frequency in ['1d', '1w', '1M', '1q']:
+    if frequency in ['1d', '1w', '1m', '1q']:
         try:
             logger.info(f"Trying Sina for {frequency} data")
             df = SinaDataFetcher.get_price(xcode, end_date=end_date, count=count, frequency=frequency)
@@ -170,10 +170,7 @@ def get_price(code: str, end_date: str = '', count: int = 10, frequency: str = '
                 return df.resample('Q').last()  # Resample to quarterly data
             return pd.DataFrame()
 
-    if frequency in ['1m', '5m', '15m', '30m', '60m']:
-        if frequency == '1m':
-            logger.info("Using Tencent for 1m data")
-            return TencentDataFetcher.get_price_min(xcode, end_date=end_date, count=count, frequency=frequency)
+    if frequency in ['5m', '15m', '30m', '60m']:
         try:
             logger.info(f"Trying Sina for {frequency} data")
             return SinaDataFetcher.get_price(xcode, end_date=end_date, count=count, frequency=frequency)

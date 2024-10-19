@@ -29,7 +29,7 @@ class GetStock:
         """
         Get stock data for the specified frequency and count.
         
-        :param frequency: '1m','5m','15m','30m','60m','1d','1w','1M','1q'
+        :param frequency: '5m','15m','30m','60m','1d','1w','1m','1q'
         :param count: Number of data points to retrieve
         :param end_date: End date for the data (optional)
         """
@@ -61,13 +61,21 @@ if __name__ == '__main__':
     gs = GetStock()
     gs.set_stock_name('sh000001')
 
-    # Test 1-minute data
-    gs.get_stock(frequency='1m', count=1000)
-    gs.save_stock_csv(frequency='1m')
+    # Test 5-minute data
+    gs.get_stock(frequency='5m', count=1000)
+    gs.save_stock_csv(frequency='5m')
+    
+    # Test 60-minute data
+    gs.get_stock(frequency='60m', count=1000)
+    gs.save_stock_csv(frequency='60m')
 
     # Test daily data
     gs.get_stock(frequency='1d', count=100)
     gs.save_stock_csv(frequency='1d')
+    
+    # Test monthly data
+    gs.get_stock(frequency='1m', count=100)
+    gs.save_stock_csv(frequency='1m')
 
     # Test quarterly data
     gs.get_stock(frequency='1q', count=20)
