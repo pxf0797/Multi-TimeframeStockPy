@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 def load_config():
     # Load configuration from a file or environment variables
     config = {
-        'asset': 'sh000001',
-        'end_date_count' : ['2024-10-18', '1000'], # for lesss len 1d, count is the date, others is period counts
+        'asset': 'sz000001',
+        'end_date_count' : ['2024-10-18', '13000'], # for lesss len 1d, count is the date, others is period counts
         'timeframes': ['5m', '15m', '60m', '1d', '1m', '1q'],
         'ma_periods': [3, 5, 10, 20],
         'macd_params': (5, 10, 5),
@@ -55,37 +55,13 @@ def load_config():
 def acquire_data(config):
     logger.info("Starting data acquisition process...")
     
-    # Set date range
-    end_date = datetime.now().strftime('%Y-%m-%d')
-    start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
-    
     # Initialize DataAcquisition
-    data_acquisition = DataAcquisition(config['asset'], config['timeframes'], config['data_dir'])
+    data_acquisition = DataAcquisition(config['asset'], config['end_date_count'], config['timeframes'], config['data_dir'])
     
-    try:
-        # Fetch and align data
-        data_acquisition.fetch_data(start_date, end_date)
-        data_acquisition.align_data()
-        
-        raw_data = {tf: data_acquisition.get_data(tf) for tf in config['timeframes']}
-        
-        # Log the shape of raw data for each timeframe
-        for tf, data in raw_data.items():
-            logger.info(f"Raw data shape for {tf}: {data.shape}")
-        
-        if all(len(df) < config['sequence_length'] for df in raw_data.values()):
-            logger.warning(f"All timeframes have less than {config['sequence_length']} data points. "
-                           f"This may affect the model's performance.")
-            logger.info("Generating synthetic data to supplement insufficient data...")
-            for tf in config['timeframes']:
-                if len(raw_data[tf]) < config['sequence_length']:
-                    raw_data[tf] = data_acquisition.generate_synthetic_data(tf, start_date, end_date, raw_data[tf])
-        
-        logger.info("Data acquisition completed successfully.")
-        return raw_data
-    except Exception as e:
-        logger.error(f"Error in data acquisition: {str(e)}")
-        return None
+    # acquire data and verify
+    data_acquisition.fetch_data_all()
+    data_acquisition.verify_csv_files()
+    
 
 def process_data(config, raw_data):
     data_processor = DataProcessor(config)

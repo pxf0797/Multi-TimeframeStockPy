@@ -4,7 +4,7 @@ from typing import List, Dict
 import os
 import logging
 from datetime import datetime, timedelta
-from GetStock import GetStock
+from Data.GetStock import GetStock
 
 logger = logging.getLogger(__name__)
 
