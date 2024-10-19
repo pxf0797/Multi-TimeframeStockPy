@@ -2,7 +2,7 @@
 # coding: utf-8
 # GetStock.py
 
-from Ashare import *
+from Ashare2 import *
 import csvfile
 import pandas as pd
 from datetime import datetime, timedelta
