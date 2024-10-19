@@ -2,81 +2,127 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 def load_holidays(holiday_file):
+    """
+    Load holiday dates from a CSV file.
+    
+    Args:
+    holiday_file (str): Path to the CSV file containing holiday dates.
+    
+    Returns:
+    set: A set of holiday dates.
+    """
     holidays_df = pd.read_csv(holiday_file, parse_dates=['date'])
     return set(holidays_df['date'].dt.date)
 
 def check_data_content(df):
+    """
+    Check the content of the dataframe for various data integrity issues.
+    
+    This function checks for:
+    1. Missing columns
+    2. Invalid data in numeric columns
+    3. Unreasonable price data
+    4. Negative volume data
+    5. Inconsistent price data (e.g., low price higher than high price)
+    
+    Args:
+    df (pd.DataFrame): The dataframe to check.
+    
+    Returns:
+    list: A list of issues found during the check.
+    """
     issues_found = []
     
-    # 检查列是否完整
+    # Check if all expected columns are present
     expected_columns = ['day', 'open', 'high', 'low', 'close', 'volume']
     missing_columns = set(expected_columns) - set(df.columns)
     if missing_columns:
-        print(f"  缺失列: {', '.join(missing_columns)}")
-        issues_found.append(f"缺失 {len(missing_columns)} 列")
+        print(f"  Missing columns: {', '.join(missing_columns)}")
+        issues_found.append(f"Missing {len(missing_columns)} columns")
     
-    # 检查数值列的有效性和合理性
+    # Check numeric columns for validity and reasonableness
     numeric_columns = ['open', 'high', 'low', 'close', 'volume']
     for col in numeric_columns:
         if col in df.columns:
+            # Check for non-numeric data
             invalid_rows = df[~df[col].apply(lambda x: isinstance(x, (int, float)))].index
             if not invalid_rows.empty:
-                print(f"  '{col}'列中存在无效数据，行数: {len(invalid_rows)}")
-                issues_found.append(f"'{col}'列有 {len(invalid_rows)} 行无效数据")
+                print(f"  Invalid data in '{col}' column, number of rows: {len(invalid_rows)}")
+                issues_found.append(f"'{col}' column has {len(invalid_rows)} rows with invalid data")
             
+            # Check for unreasonable price data (excluding volume)
             if col != 'volume':
                 unreasonable_prices = df[(df[col] <= 0) | (df[col] > 1000)].index
                 if not unreasonable_prices.empty:
-                    print(f"  '{col}'列中存在可疑的价格数据，行数: {len(unreasonable_prices)}")
-                    issues_found.append(f"'{col}'列有 {len(unreasonable_prices)} 行可疑价格")
+                    print(f"  Suspicious price data in '{col}' column, number of rows: {len(unreasonable_prices)}")
+                    issues_found.append(f"'{col}' column has {len(unreasonable_prices)} rows with suspicious prices")
     
-    # 检查成交量的合理性
+    # Check for negative volume
     if 'volume' in df.columns:
         unreasonable_volume = df[df['volume'] < 0].index
         if not unreasonable_volume.empty:
-            print(f"  'volume'列中存在可疑的成交量数据，行数: {len(unreasonable_volume)}")
-            issues_found.append(f"'volume'列有 {len(unreasonable_volume)} 行可疑成交量")
+            print(f"  Suspicious volume data in 'volume' column, number of rows: {len(unreasonable_volume)}")
+            issues_found.append(f"'volume' column has {len(unreasonable_volume)} rows with suspicious volume")
     
-    # 检查高低价的合理性
+    # Check for price inconsistencies
     price_issues = df[(df['low'] > df['high']) | (df['open'] > df['high']) | (df['open'] < df['low']) |
                       (df['close'] > df['high']) | (df['close'] < df['low'])]
     if not price_issues.empty:
-        print(f"  存在价格数据不一致的行，行数: {len(price_issues)}")
+        print(f"  Inconsistent price data, number of rows: {len(price_issues)}")
         for index, row in price_issues.iterrows():
-            print(f"    日期时间: {row['day']}, 开盘: {row['open']}, 最高: {row['high']}, 最低: {row['low']}, 收盘: {row['close']}")
-        issues_found.append(f"有 {len(price_issues)} 行价格数据不一致")
+            print(f"    Date/Time: {row['day']}, Open: {row['open']}, High: {row['high']}, Low: {row['low']}, Close: {row['close']}")
+        issues_found.append(f"{len(price_issues)} rows with inconsistent price data")
     
     return issues_found
 
 def print_summary(df, issues_found, period_name):
-    print("\n检查状态汇总:")
+    """
+    Print a summary of the data integrity check.
+    
+    Args:
+    df (pd.DataFrame): The dataframe that was checked.
+    issues_found (list): List of issues found during the check.
+    period_name (str): Name of the period (e.g., "Daily", "Weekly", "Quarterly").
+    """
+    print("\nCheck Status Summary:")
     if issues_found:
-        print("发现以下问题:")
+        print("The following issues were found:")
         for issue in issues_found:
             print(f"- {issue}")
     else:
-        print("未发现任何问题，数据完整性良好。")
+        print("No issues found. Data integrity is good.")
     
-    print("\n检查内容汇总:")
-    print(f"- 总行数: {len(df)}")
-    print(f"- 日期范围: 从 {df['day'].min()} 到 {df['day'].max()}")
-    print(f"- 检查的列: {', '.join(df.columns)}")
-    if period_name in ['日线', '周线', '季线']:
-        print(f"- {period_name}数: {len(df)}")
+    print("\nCheck Content Summary:")
+    print(f"- Total rows: {len(df)}")
+    print(f"- Date range: from {df['day'].min()} to {df['day'].max()}")
+    print(f"- Columns checked: {', '.join(df.columns)}")
+    if period_name in ['Daily', 'Weekly', 'Quarterly']:
+        print(f"- Number of {period_name.lower()} periods: {len(df)}")
     else:
-        print(f"- 交易日数: {len(df['day'].dt.date.unique())}")
+        print(f"- Number of trading days: {len(df['day'].dt.date.unique())}")
     
-    print(f"\n{period_name}数据完整性检查完成。")
+    print(f"\n{period_name} data integrity check completed.")
 
 def check_daily_data_integrity(file_path, holiday_file):
+    """
+    Check the integrity of daily stock data.
+    
+    This function checks for:
+    1. Missing workdays (excluding weekends and holidays)
+    2. Data content issues
+    
+    Args:
+    file_path (str): Path to the CSV file containing daily stock data.
+    holiday_file (str): Path to the CSV file containing holiday dates.
+    """
     df = pd.read_csv(file_path, parse_dates=['day'])
     holidays = load_holidays(holiday_file)
     df = df.sort_values('day')
     
-    print("检查日线数据完整性:")
+    print("Checking daily data integrity:")
     issues_found = []
     
-    # 1. 检查连续的周期是否完整
+    # Check for missing workdays
     date_range = pd.date_range(start=df['day'].min(), end=df['day'].max())
     missing_dates = set(date_range) - set(df['day'])
     
@@ -84,20 +130,30 @@ def check_daily_data_integrity(file_path, holiday_file):
                          if date.weekday() < 5 and date.date() not in holidays]
     
     if work_days_missing:
-        print("\n1. 以下工作日缺失（不包括周末和法定假期）:")
+        print("\n1. The following workdays are missing (excluding weekends and holidays):")
         for date in work_days_missing:
             print(f"   {date.date()}")
-        issues_found.append(f"缺失 {len(work_days_missing)} 个非假期工作日")
+        issues_found.append(f"Missing {len(work_days_missing)} non-holiday workdays")
     else:
-        print("\n1. 所有非假期工作日的数据都存在。")
+        print("\n1. All non-holiday workdays are present.")
     
-    # 2. 检查数据内容
-    print("\n2. 检查数据内容:")
+    # Check data content
+    print("\n2. Checking data content:")
     issues_found.extend(check_data_content(df))
     
-    print_summary(df, issues_found, "日线")
+    print_summary(df, issues_found, "Daily")
 
 def get_last_trading_day_of_week(date, holidays):
+    """
+    Get the last trading day of the week for a given date.
+    
+    Args:
+    date (datetime): The date to check.
+    holidays (set): Set of holiday dates.
+    
+    Returns:
+    date: The last trading day of the week, or None if no trading day found.
+    """
     for i in range(4, -1, -1):
         day = date - timedelta(days=date.weekday() - i)
         if day.date() not in holidays:
@@ -105,14 +161,26 @@ def get_last_trading_day_of_week(date, holidays):
     return None
 
 def check_weekly_data_integrity(file_path, holiday_file):
+    """
+    Check the integrity of weekly stock data.
+    
+    This function checks for:
+    1. Missing or extra weeks
+    2. Incorrect last trading day of each week
+    3. Data content issues
+    
+    Args:
+    file_path (str): Path to the CSV file containing weekly stock data.
+    holiday_file (str): Path to the CSV file containing holiday dates.
+    """
     df = pd.read_csv(file_path, parse_dates=['day'])
     holidays = load_holidays(holiday_file)
     df = df.sort_values('day')
     
-    print("检查周线数据完整性:")
+    print("Checking weekly data integrity:")
     issues_found = []
     
-    # 1. 检查连续的周期是否完整
+    # Check for missing or extra weeks
     start_date = df['day'].min()
     end_date = df['day'].max()
     
@@ -130,18 +198,18 @@ def check_weekly_data_integrity(file_path, holiday_file):
     extra_weeks = set(actual_weeks) - set(expected_weeks)
     
     if missing_weeks:
-        print("\n1. 以下周缺失数据:")
+        print("\n1. The following weeks are missing data:")
         for week in sorted(missing_weeks):
             print(f"   - {week}")
-        issues_found.append(f"缺失 {len(missing_weeks)} 周数据")
+        issues_found.append(f"Missing {len(missing_weeks)} weeks of data")
     
     if extra_weeks:
-        print("\n  数据中存在以下多余的周:")
+        print("\n  The following extra weeks are present in the data:")
         for week in sorted(extra_weeks):
             print(f"   - {week}")
-        issues_found.append(f"存在 {len(extra_weeks)} 个多余的周")
+        issues_found.append(f"{len(extra_weeks)} extra weeks present")
     
-    # 2. 检查每周的最后交易日
+    # Check if each week's data is on the last trading day
     incorrect_last_trading_days = []
     for _, row in df.iterrows():
         expected_last_trading_day = get_last_trading_day_of_week(row['day'], holidays)
@@ -149,18 +217,28 @@ def check_weekly_data_integrity(file_path, holiday_file):
             incorrect_last_trading_days.append((row['day'].date(), expected_last_trading_day))
     
     if incorrect_last_trading_days:
-        print("\n2. 以下周的最后交易日不正确:")
+        print("\n2. The following weeks have incorrect last trading days:")
         for actual, expected in incorrect_last_trading_days:
-            print(f"   - 实际: {actual}, 应为: {expected or 'None'}")
-        issues_found.append(f"有 {len(incorrect_last_trading_days)} 周的最后交易日不正确")
+            print(f"   - Actual: {actual}, Expected: {expected or 'None'}")
+        issues_found.append(f"{len(incorrect_last_trading_days)} weeks have incorrect last trading days")
     
-    # 3. 检查数据内容
-    print("\n3. 检查数据内容:")
+    # Check data content
+    print("\n3. Checking data content:")
     issues_found.extend(check_data_content(df))
     
-    print_summary(df, issues_found, "周线")
+    print_summary(df, issues_found, "Weekly")
 
 def get_last_trading_day_of_quarter(date, holidays):
+    """
+    Get the last trading day of the quarter for a given date.
+    
+    Args:
+    date (datetime): The date to check.
+    holidays (set): Set of holiday dates.
+    
+    Returns:
+    date: The last trading day of the quarter, or None if no trading day found.
+    """
     quarter_end = pd.Timestamp(date).to_period('Q').end_time.date()
     for i in range(7):  # Check up to 7 days before quarter end
         day = quarter_end - timedelta(days=i)
@@ -169,14 +247,26 @@ def get_last_trading_day_of_quarter(date, holidays):
     return None
 
 def check_quarterly_data_integrity(file_path, holiday_file):
+    """
+    Check the integrity of quarterly stock data.
+    
+    This function checks for:
+    1. Missing or extra quarters
+    2. Incorrect last trading day of each quarter
+    3. Data content issues
+    
+    Args:
+    file_path (str): Path to the CSV file containing quarterly stock data.
+    holiday_file (str): Path to the CSV file containing holiday dates.
+    """
     df = pd.read_csv(file_path, parse_dates=['day'])
     holidays = load_holidays(holiday_file)
     df = df.sort_values('day')
     
-    print("检查季线数据完整性:")
+    print("Checking quarterly data integrity:")
     issues_found = []
     
-    # 1. 检查连续的季度是否完整
+    # Check for missing or extra quarters
     start_date = df['day'].min()
     end_date = df['day'].max()
     
@@ -196,18 +286,18 @@ def check_quarterly_data_integrity(file_path, holiday_file):
     extra_quarters = set(actual_quarters) - set(expected_quarters)
     
     if missing_quarters:
-        print("\n1. 以下季度缺失数据:")
+        print("\n1. The following quarters are missing data:")
         for quarter in sorted(missing_quarters):
             print(f"   - {quarter}")
-        issues_found.append(f"缺失 {len(missing_quarters)} 个季度数据")
+        issues_found.append(f"Missing {len(missing_quarters)} quarters of data")
     
     if extra_quarters:
-        print("\n  数据中存在以下多余的季度:")
+        print("\n  The following extra quarters are present in the data:")
         for quarter in sorted(extra_quarters):
             print(f"   - {quarter}")
-        issues_found.append(f"存在 {len(extra_quarters)} 个多余的季度")
+        issues_found.append(f"{len(extra_quarters)} extra quarters present")
     
-    # 2. 检查每个季度的最后交易日
+    # Check if each quarter's data is on the last trading day
     incorrect_last_trading_days = []
     for _, row in df.iterrows():
         expected_last_trading_day = get_last_trading_day_of_quarter(row['day'], holidays)
@@ -215,52 +305,92 @@ def check_quarterly_data_integrity(file_path, holiday_file):
             incorrect_last_trading_days.append((row['day'].date(), expected_last_trading_day))
     
     if incorrect_last_trading_days:
-        print("\n2. 以下季度的最后交易日不正确:")
+        print("\n2. The following quarters have incorrect last trading days:")
         for actual, expected in incorrect_last_trading_days:
-            print(f"   - 实际: {actual}, 应为: {expected or 'None'}")
-        issues_found.append(f"有 {len(incorrect_last_trading_days)} 个季度的最后交易日不正确")
+            print(f"   - Actual: {actual}, Expected: {expected or 'None'}")
+        issues_found.append(f"{len(incorrect_last_trading_days)} quarters have incorrect last trading days")
 
-    # 3. 检查数据内容
-    print("\n3. 检查数据内容:")
+    # Check data content
+    print("\n3. Checking data content:")
     issues_found.extend(check_data_content(df))
     
-    print_summary(df, issues_found, "季线")
+    print_summary(df, issues_found, "Quarterly")
 
 def check_intraday_data_integrity(file_path, holiday_file, period_name, trading_hours):
+    """
+    Check the integrity of intraday stock data.
+    
+    This function checks for:
+    1. Missing time periods on trading days
+    2. Data content issues
+    
+    Args:
+    file_path (str): Path to the CSV file containing intraday stock data.
+    holiday_file (str): Path to the CSV file containing holiday dates.
+    period_name (str): Name of the intraday period (e.g., "60-minute", "15-minute", "5-minute").
+    trading_hours (list): List of expected trading times in 'HH:MM' format.
+    """
     df = pd.read_csv(file_path, parse_dates=['day'])
     holidays = load_holidays(holiday_file)
     df = df.sort_values('day')
     
-    print(f"检查{period_name}数据完整性:")
+    print(f"Checking {period_name} data integrity:")
     issues_found = []
     
-    # 1. 检查交易时间段是否完整
+    # Check for missing time periods on trading days
     for date, group in df.groupby(df['day'].dt.date):
-        if date.weekday() < 5 and date not in holidays:  # 工作日且非节假日
+        if date.weekday() < 5 and date not in holidays:  # Workday and not a holiday
             times = group['day'].dt.strftime('%H:%M').tolist()
             missing_times = set(trading_hours) - set(times)
             if missing_times:
-                print(f"日期 {date} 缺少以下时间段: {', '.join(missing_times)}")
-                issues_found.append(f"日期 {date} 缺少 {len(missing_times)} 个时间段")
+                print(f"Date {date} is missing the following time periods: {','.join(missing_times)}")
+                issues_found.append(f"Date {date} is missing {len(missing_times)} time periods")
     
-    # 2. 检查数据内容
-    print("\n2. 检查数据内容:")
+    # Check data content
+    print("\n2. Checking data content:")
     issues_found.extend(check_data_content(df))
     
     print_summary(df, issues_found, period_name)
 
 def check_60min_data_integrity(file_path, holiday_file):
+    """
+    Check the integrity of 60-minute interval stock data.
+    
+    This function is a wrapper for check_intraday_data_integrity with 60-minute specific trading hours.
+    
+    Args:
+    file_path (str): Path to the CSV file containing 60-minute interval stock data.
+    holiday_file (str): Path to the CSV file containing holiday dates.
+    """
     trading_hours = ['10:30', '11:30', '14:00', '15:00']
-    check_intraday_data_integrity(file_path, holiday_file, "60分钟线", trading_hours)
+    check_intraday_data_integrity(file_path, holiday_file, "60-minute", trading_hours)
 
 def check_15min_data_integrity(file_path, holiday_file):
+    """
+    Check the integrity of 15-minute interval stock data.
+    
+    This function is a wrapper for check_intraday_data_integrity with 15-minute specific trading hours.
+    
+    Args:
+    file_path (str): Path to the CSV file containing 15-minute interval stock data.
+    holiday_file (str): Path to the CSV file containing holiday dates.
+    """
     trading_hours = [
         '09:45', '10:00', '10:15', '10:30', '10:45', '11:00', '11:15', '11:30',
         '13:15', '13:30', '13:45', '14:00', '14:15', '14:30', '14:45', '15:00'
     ]
-    check_intraday_data_integrity(file_path, holiday_file, "15分钟线", trading_hours)
+    check_intraday_data_integrity(file_path, holiday_file, "15-minute", trading_hours)
 
 def check_5min_data_integrity(file_path, holiday_file):
+    """
+    Check the integrity of 5-minute interval stock data.
+    
+    This function is a wrapper for check_intraday_data_integrity with 5-minute specific trading hours.
+    
+    Args:
+    file_path (str): Path to the CSV file containing 5-minute interval stock data.
+    holiday_file (str): Path to the CSV file containing holiday dates.
+    """
     trading_hours = [
         '09:35', '09:40', '09:45', '09:50', '09:55',
         '10:00', '10:05', '10:10', '10:15', '10:20', '10:25', '10:30', '10:35', '10:40', '10:45', '10:50', '10:55',
@@ -269,44 +399,52 @@ def check_5min_data_integrity(file_path, holiday_file):
         '14:00', '14:05', '14:10', '14:15', '14:20', '14:25', '14:30', '14:35', '14:40', '14:45', '14:50', '14:55',
         '15:00'
     ]
-    check_intraday_data_integrity(file_path, holiday_file, "5分钟线", trading_hours)
+    check_intraday_data_integrity(file_path, holiday_file, "5-minute", trading_hours)
 
-# 测试函数
 def test_data_integrity():
-    # 测试日线数据完整性检查
-    print("测试日线数据完整性检查:")
+    """
+    Test function to run integrity checks on various types of stock data.
+    
+    This function demonstrates how to use the different data integrity check functions
+    for daily, weekly, quarterly, and intraday (60-minute, 15-minute, 5-minute) data.
+    
+    Note: Ensure that the CSV files mentioned in this function exist in the same directory,
+    or provide the full path to these files.
+    """
+    # Test daily data integrity check
+    print("Testing daily data integrity check:")
     check_daily_data_integrity('sz000001_1d_1983-09-24_2024-10-18_2.csv', 'chinese_holidays.csv')
 
     print("\n" + "="*50 + "\n")
 
-    # 测试周线数据完整性检查
-    print("测试周线数据完整性检查:")
+    # Test weekly data integrity check
+    print("Testing weekly data integrity check:")
     check_weekly_data_integrity('sz000001_1w_1909-10-22_2024-10-18.csv', 'chinese_holidays.csv')
 
     print("\n" + "="*50 + "\n")
 
-    # 测试季线数据完整性检查
-    print("测试季线数据完整性检查:")
+    # Test quarterly data integrity check
+    print("Testing quarterly data integrity check:")
     check_quarterly_data_integrity('sz000001_1q_1901-08-05_2024-10-18.csv', 'chinese_holidays.csv')
 
     print("\n" + "="*50 + "\n")
 
-    # 测试60分钟线数据完整性检查
-    print("测试60分钟线数据完整性检查:")
+    # Test 60-minute data integrity check
+    print("Testing 60-minute data integrity check:")
     check_60min_data_integrity('sz000001_60m_1983-09-24_2024-10-18.csv', 'chinese_holidays.csv')
     
     print("\n" + "="*50 + "\n")
 
-    # 测试15分钟线数据完整性检查
-    print("测试15分钟线数据完整性检查:")
+    # Test 15-minute data integrity check
+    print("Testing 15-minute data integrity check:")
     check_15min_data_integrity('sz000001_15m_1983-09-24_2024-10-18_2.csv', 'chinese_holidays.csv')
 
     print("\n" + "="*50 + "\n")
 
-    # 测试5分钟线数据完整性检查
-    print("测试5分钟线数据完整性检查:")
+    # Test 5-minute data integrity check
+    print("Testing 5-minute data integrity check:")
     check_5min_data_integrity('sz000001_5m_1983-09-24_2024-10-18_2.csv', 'chinese_holidays.csv')
 
-# 运行测试
+# Run the test function if this script is executed directly
 if __name__ == "__main__":
     test_data_integrity()
