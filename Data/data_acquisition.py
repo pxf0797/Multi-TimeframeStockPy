@@ -6,7 +6,7 @@ import logging
 import glob
 from datetime import datetime, timedelta
 from GetStock import GetStock
-from data_integrity_check import check_intraday_data_integrity
+from data_integrity_check import check_intraday_data_integrity, check_period_data_integrity
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ class DataAcquisition:
         if not self.data:
             raise ValueError("No data could be fetched for any timeframe")
 
-    def validate_csv_data(self, file_name: str, timeframe: str) -> bool:
+    def validate_csv_data(self, file_path: str, timeframe: str) -> bool:
         logger.info(f"Start for {timeframe} check.")
         
         timeframe_types = {
@@ -100,7 +100,15 @@ class DataAcquisition:
             '1m': 'monthly',
             '1q': 'quarterly'
         }
-        check_intraday_data_integrity(file_path = 'Data/csv_files', file_name=file_name, holiday_file='chinese_holidays.csv', timeframe=timeframe_types[timeframe])
+        
+        # Use an absolute path for the holiday file
+        holiday_file = os.path.abspath(os.path.join(os.path.dirname(__file__), 'chinese_holidays.csv'))
+        logger.info(f"Holiday file path: {holiday_file}")
+        
+        if timeframe in ['5m', '15m', '60m']:
+            check_intraday_data_integrity(file_path=file_path, holiday_file=holiday_file, period=timeframe_types[timeframe])
+        else:
+            check_period_data_integrity(file_path=file_path, holiday_file=holiday_file, period=timeframe_types[timeframe])
         
         logger.info(f"Data validation successful for {timeframe}")
         return True
@@ -114,7 +122,7 @@ class DataAcquisition:
             if matching_files:
                 file_path = matching_files[0]  # Use the first matching file
                 try:
-                    if self.validate_csv_data(os.path.basename(file_path), tf):
+                    if self.validate_csv_data(file_path, tf):
                         logger.info(f"Data validation successful for {tf}")
                     else:
                         logger.error(f"Data validation failed for {tf}")
@@ -141,8 +149,7 @@ class DataAcquisition:
                     logger.error(f"CSV file for {tf} is empty")
                 else:
                     # Read and validate the CSV data
-                    df = pd.read_csv(file_path)
-                    if self.validate_csv_data(os.path.basename(file_path), tf):
+                    if self.validate_csv_data(file_path, tf):
                         logger.info(f"CSV data for {tf} is valid")
                     else:
                         logger.error(f"CSV data for {tf} is invalid")
