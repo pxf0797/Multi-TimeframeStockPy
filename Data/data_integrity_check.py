@@ -228,6 +228,94 @@ def check_weekly_data_integrity(file_path, holiday_file):
     
     print_summary(df, issues_found, "Weekly")
 
+def get_last_trading_day_of_month(date, holidays):
+    """
+    Get the last trading day of the month for a given date.
+    
+    Args:
+    date (datetime): The date to check.
+    holidays (set): Set of holiday dates.
+    
+    Returns:
+    date: The last trading day of the month, or None if no trading day found.
+    """
+    next_month = date.replace(day=28) + timedelta(days=4)  # Move to next month
+    month_end = next_month - timedelta(days=next_month.day)  # Last day of current month
+    
+    for i in range(10):  # Check up to 10 days before month end
+        day = month_end - timedelta(days=i)
+        if day.weekday() < 5 and day.date() not in holidays:
+            return day.date()
+    return None
+
+def check_monthly_data_integrity(file_path, holiday_file):
+    """
+    Check the integrity of monthly stock data.
+    
+    This function checks for:
+    1. Missing or extra months
+    2. Incorrect last trading day of each month
+    3. Data content issues
+    
+    Args:
+    file_path (str): Path to the CSV file containing monthly stock data.
+    holiday_file (str): Path to the CSV file containing holiday dates.
+    """
+    df = pd.read_csv(file_path, parse_dates=['day'])
+    holidays = load_holidays(holiday_file)
+    df = df.sort_values('day')
+    
+    print("Checking monthly data integrity:")
+    issues_found = []
+    
+    # Check for missing or extra months
+    start_date = df['day'].min()
+    end_date = df['day'].max()
+    
+    current_month = start_date.replace(day=1)
+    expected_months = []
+    while current_month <= end_date:
+        last_trading_day = get_last_trading_day_of_month(current_month, holidays)
+        if last_trading_day:
+            expected_months.append(last_trading_day)
+        current_month = (current_month + timedelta(days=32)).replace(day=1)
+    
+    actual_months = df['day'].dt.date.tolist()
+    
+    missing_months = set(expected_months) - set(actual_months)
+    extra_months = set(actual_months) - set(expected_months)
+    
+    if missing_months:
+        print("\n1. The following months are missing data:")
+        for month in sorted(missing_months):
+            print(f"   - {month}")
+        issues_found.append(f"Missing {len(missing_months)} months of data")
+    
+    if extra_months:
+        print("\n  The following extra months are present in the data:")
+        for month in sorted(extra_months):
+            print(f"   - {month}")
+        issues_found.append(f"{len(extra_months)} extra months present")
+    
+    # Check if each month's data is on the last trading day
+    incorrect_last_trading_days = []
+    for _, row in df.iterrows():
+        expected_last_trading_day = get_last_trading_day_of_month(row['day'], holidays)
+        if row['day'].date() != expected_last_trading_day:
+            incorrect_last_trading_days.append((row['day'].date(), expected_last_trading_day))
+    
+    if incorrect_last_trading_days:
+        print("\n2. The following months have incorrect last trading days:")
+        for actual, expected in incorrect_last_trading_days:
+            print(f"   - Actual: {actual}, Expected: {expected or 'None'}")
+        issues_found.append(f"{len(incorrect_last_trading_days)} months have incorrect last trading days")
+    
+    # Check data content
+    print("\n3. Checking data content:")
+    issues_found.extend(check_data_content(df))
+    
+    print_summary(df, issues_found, "Monthly")
+
 def get_last_trading_day_of_quarter(date, holidays):
     """
     Get the last trading day of the quarter for a given date.
@@ -406,44 +494,51 @@ def test_data_integrity():
     Test function to run integrity checks on various types of stock data.
     
     This function demonstrates how to use the different data integrity check functions
-    for daily, weekly, quarterly, and intraday (60-minute, 15-minute, 5-minute) data.
+    for daily, weekly, monthly, quarterly, and intraday (60-minute, 15-minute, 5-minute) data.
     
     Note: Ensure that the CSV files mentioned in this function exist in the same directory,
     or provide the full path to these files.
     """
+    file_path = 'csv_files/'
     # Test daily data integrity check
     print("Testing daily data integrity check:")
-    check_daily_data_integrity('sz000001_1d_1983-09-24_2024-10-18_2.csv', 'chinese_holidays.csv')
+    check_daily_data_integrity(file_path+'sz000001_1d_1983-09-24_2024-10-18_2.csv', 'chinese_holidays.csv')
 
     print("\n" + "="*50 + "\n")
 
     # Test weekly data integrity check
     print("Testing weekly data integrity check:")
-    check_weekly_data_integrity('sz000001_1w_1909-10-22_2024-10-18.csv', 'chinese_holidays.csv')
+    check_weekly_data_integrity(file_path+'sz000001_1w_1909-10-22_2024-10-18.csv', 'chinese_holidays.csv')
+
+    print("\n" + "="*50 + "\n")
+
+    # Test monthly data integrity check
+    print("Testing monthly data integrity check:")
+    check_monthly_data_integrity(file_path+'sz000001_1m_1860-07-10_2024-10-18.csv', 'chinese_holidays.csv')
 
     print("\n" + "="*50 + "\n")
 
     # Test quarterly data integrity check
     print("Testing quarterly data integrity check:")
-    check_quarterly_data_integrity('sz000001_1q_1901-08-05_2024-10-18.csv', 'chinese_holidays.csv')
+    check_quarterly_data_integrity(file_path+'sz000001_1q_1901-08-05_2024-10-18.csv', 'chinese_holidays.csv')
 
     print("\n" + "="*50 + "\n")
 
     # Test 60-minute data integrity check
     print("Testing 60-minute data integrity check:")
-    check_60min_data_integrity('sz000001_60m_1983-09-24_2024-10-18.csv', 'chinese_holidays.csv')
+    check_60min_data_integrity(file_path+'sz000001_60m_1983-09-24_2024-10-18.csv', 'chinese_holidays.csv')
     
     print("\n" + "="*50 + "\n")
 
     # Test 15-minute data integrity check
     print("Testing 15-minute data integrity check:")
-    check_15min_data_integrity('sz000001_15m_1983-09-24_2024-10-18_2.csv', 'chinese_holidays.csv')
+    check_15min_data_integrity(file_path+'sz000001_15m_1983-09-24_2024-10-18_2.csv', 'chinese_holidays.csv')
 
     print("\n" + "="*50 + "\n")
 
     # Test 5-minute data integrity check
     print("Testing 5-minute data integrity check:")
-    check_5min_data_integrity('sz000001_5m_1983-09-24_2024-10-18_2.csv', 'chinese_holidays.csv')
+    check_5min_data_integrity(file_path+'sz000001_5m_1983-09-24_2024-10-18_2.csv', 'chinese_holidays.csv')
 
 # Run the test function if this script is executed directly
 if __name__ == "__main__":
