@@ -150,6 +150,7 @@ def check_period_data_integrity(file_path: str, holiday_file: str, period: str) 
 def generate_trading_hours(period: str) -> List[str]:
     """
     Generate trading hours based on the given period for Chinese stock market.
+    Starts from 09:30 and 13:00 but excludes these times from the final result.
     
     Args:
     period (str): The trading period ('5min', '15min', or '60min').
@@ -175,9 +176,12 @@ def generate_trading_hours(period: str) -> List[str]:
     for start, end in trading_sessions:
         current_time = datetime.strptime(start, '%H:%M')
         end_time = datetime.strptime(end, '%H:%M')
-        while current_time < end_time:  # Changed <= to < to exclude end time
+        while current_time <= end_time:
             trading_hours.append(current_time.strftime('%H:%M'))
             current_time += interval
+    
+    # Remove 09:30 and 13:00 from the generated times
+    trading_hours = [time for time in trading_hours if time not in ['09:30', '13:00']]
     
     return trading_hours
 
