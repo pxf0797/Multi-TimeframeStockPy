@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import os
+import glob
 from datetime import datetime, timedelta, date
 from typing import Set, List, Tuple, Optional, Union
 
@@ -323,24 +325,39 @@ def test_data_integrity():
     """
     file_path = 'csv_files/'
     holiday_file = 'chinese_holidays.csv'
+    symbol = "sz000001"
+    timeframes = ["5m", "15m", "60m", "1d", "1w", "1m", "1q"]
 
     data_types = {
-        'daily': ('sz000001_1d_1983-09-24_2024-10-18_2.csv', check_period_data_integrity, 'daily'),
-        'weekly': ('sz000001_1w_1909-10-22_2024-10-18.csv', check_period_data_integrity, 'weekly'),
-        'monthly': ('sz000001_1m_1860-07-10_2024-10-18.csv', check_period_data_integrity, 'monthly'),
-        'quarterly': ('sz000001_1q_1901-08-05_2024-10-18.csv', check_period_data_integrity, 'quarterly'),
-        '60min': ('sz000001_60m_1983-09-24_2024-10-18.csv', check_intraday_data_integrity, '60min'),
-        '15min': ('sz000001_15m_1983-09-24_2024-10-18_2.csv', check_intraday_data_integrity, '15min'),
-        '5min': ('sz000001_5m_1983-09-24_2024-10-18_2.csv', check_intraday_data_integrity, '5min')
+        '1d': ('daily', check_period_data_integrity, 'daily'),
+        '1w': ('weekly', check_period_data_integrity, 'weekly'),
+        '1m': ('monthly', check_period_data_integrity, 'monthly'),
+        '1q': ('quarterly', check_period_data_integrity, 'quarterly'),
+        '60m': ('60min', check_intraday_data_integrity, '60min'),
+        '15m': ('15min', check_intraday_data_integrity, '15min'),
+        '5m': ('5min', check_intraday_data_integrity, '5min')
     }
 
-    for data_type, (filename, check_function, period) in data_types.items():
-        print(f"\nTesting {data_type} data integrity check:")
-        try:
-            check_function(file_path + filename, holiday_file, period)
-        except Exception as e:
-            print(f"Error occurred while checking {data_type} data: {str(e)}")
-        print("="*50)
+    def glob_file_match(symbol, timeframe):
+        pattern = os.path.join(file_path, f"{symbol}*{timeframe}*.csv")
+        matching_files = glob.glob(pattern)
+        return matching_files[0] if matching_files else None
+
+    for timeframe in timeframes:
+        if timeframe in data_types:
+            print(f"\nTesting {timeframe} data integrity check for {symbol}:")
+            data_type, check_function, period = data_types[timeframe]
+            filename = glob_file_match(symbol, timeframe)
+            if filename:
+                try:
+                    check_function(filename, holiday_file, period)
+                except Exception as e:
+                    print(f"Error occurred while checking {timeframe} data: {str(e)}")
+            else:
+                print(f"No matching file found for {symbol} with timeframe {timeframe}")
+            print("="*50)
+        else:
+            print(f"No check defined for timeframe: {timeframe}")
 
 if __name__ == "__main__":
     test_data_integrity()
