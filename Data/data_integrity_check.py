@@ -267,11 +267,13 @@ def check_period_data_integrity(file_path: str, holiday_file: str, period: str, 
     extra_periods = set(actual_periods) - set(expected_periods)
     
     if missing_periods:
+        print(f"Missing {len(missing_periods)} {period} of data, detail see log.")
         issues_found.append(f"Missing {len(missing_periods)} {period} of data:")
         for missing_date in sorted(missing_periods):
             issues_found.append(f"  Missing date: {missing_date}")
     
     if extra_periods:
+        print(f"Found {len(extra_periods)} extra {period} of data, detail see log.")
         issues_found.append(f"{len(extra_periods)} extra {period} present:")
         for extra_date in sorted(extra_periods):
             issues_found.append(f"  Extra date: {extra_date}")
@@ -284,6 +286,7 @@ def check_period_data_integrity(file_path: str, holiday_file: str, period: str, 
                 incorrect_last_trading_days.append((row['day'].date(), expected_last_trading_day))
         
         if incorrect_last_trading_days:
+            print(f"Found {len(incorrect_last_trading_days)} {period} have incorrect last trading days, detail see log.")
             issues_found.append(f"{len(incorrect_last_trading_days)} {period} have incorrect last trading days:")
             for actual, expected in incorrect_last_trading_days:
                 issues_found.append(f"  Actual: {actual}, Expected: {expected}")
@@ -291,6 +294,8 @@ def check_period_data_integrity(file_path: str, holiday_file: str, period: str, 
     issues_found.extend(check_data_content(df))
     
     log_summary(df, issues_found, period.capitalize(), logger)
+    print("="*50)
+    
 
 def check_intraday_data_integrity(file_path: str, holiday_file: str, period: str, logger: logging.Logger) -> None:
     """
@@ -319,11 +324,13 @@ def check_intraday_data_integrity(file_path: str, holiday_file: str, period: str
             times = group['day'].dt.strftime('%H:%M').tolist()
             missing_times = set(trading_hours) - set(times)
             if missing_times:
+                print(f"Date {date} is missing {len(missing_times)} time periods, detail see log.")
                 issues_found.append(f"Date {date} is missing {len(missing_times)} time periods: {', '.join(sorted(missing_times))}")
     
     issues_found.extend(check_data_content(df))
     
     log_summary(df, issues_found, f"{period} intraday", logger)
+    print("="*50)
 
 def test_data_integrity():
     """
@@ -375,7 +382,7 @@ def test_data_integrity():
             else:
                 print(f"No matching file found for {symbol} with timeframe {timeframe}")
                 summary.append(f"{symbol} {timeframe}: No matching file found.")
-            print("="*50)
+            #print("="*50)
         else:
             print(f"No check defined for timeframe: {timeframe}")
             summary.append(f"{symbol} {timeframe}: No check defined.")
