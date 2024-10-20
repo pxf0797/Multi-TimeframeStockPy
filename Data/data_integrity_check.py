@@ -20,30 +20,44 @@ def check_data_content(df: pd.DataFrame) -> List[str]:
     numeric_columns = ['open', 'high', 'low', 'close', 'volume']
     for col in numeric_columns:
         if col in df.columns:
-            invalid_rows = df[~pd.to_numeric(df[col], errors='coerce').notna()].index
+            invalid_rows = df[~pd.to_numeric(df[col], errors='coerce').notna()]
             if not invalid_rows.empty:
-                issues_found.append(f"'{col}' column has {len(invalid_rows)} rows with invalid data")
+                issues_found.append(f"'{col}' column has {len(invalid_rows)} rows with invalid data:")
+                for idx, row in invalid_rows.iterrows():
+                    issues_found.append(f"  Date: {row['day']}, {col}: {row[col]} - Invalid numeric value")
             
             if col != 'volume':
                 unreasonable_prices = df[(df[col] <= 0) | (df[col] > 1000)]
                 if not unreasonable_prices.empty:
                     issues_found.append(f"'{col}' column has {len(unreasonable_prices)} rows with suspicious prices:")
                     for idx, row in unreasonable_prices.iterrows():
-                        issues_found.append(f"  Date: {row['day']}, {col}: {row[col]}")
+                        reason = "Price <= 0" if row[col] <= 0 else "Price > 1000"
+                        issues_found.append(f"  Date: {row['day']}, {col}: {row[col]} - {reason}")
     
     if 'volume' in df.columns:
         unreasonable_volume = df[df['volume'] < 0]
         if not unreasonable_volume.empty:
             issues_found.append(f"'volume' column has {len(unreasonable_volume)} rows with suspicious volume:")
             for idx, row in unreasonable_volume.iterrows():
-                issues_found.append(f"  Date: {row['day']}, Volume: {row['volume']}")
+                issues_found.append(f"  Date: {row['day']}, Volume: {row['volume']} - Negative volume")
     
     price_issues = df[(df['low'] > df['high']) | (df['open'] > df['high']) | (df['open'] < df['low']) |
                       (df['close'] > df['high']) | (df['close'] < df['low'])]
     if not price_issues.empty:
         issues_found.append(f"{len(price_issues)} rows with inconsistent price data:")
         for idx, row in price_issues.iterrows():
-            issues_found.append(f"  Date: {row['day']}, Open: {row['open']}, High: {row['high']}, Low: {row['low']}, Close: {row['close']}")
+            reasons = []
+            if row['low'] > row['high']:
+                reasons.append("Low > High")
+            if row['open'] > row['high']:
+                reasons.append("Open > High")
+            if row['open'] < row['low']:
+                reasons.append("Open < Low")
+            if row['close'] > row['high']:
+                reasons.append("Close > High")
+            if row['close'] < row['low']:
+                reasons.append("Close < Low")
+            issues_found.append(f"  Date: {row['day']}, Open: {row['open']}, High: {row['high']}, Low: {row['low']}, Close: {row['close']} - Reasons: {', '.join(reasons)}")
     
     return issues_found
 
@@ -251,14 +265,3 @@ def test_data_integrity():
 
 if __name__ == "__main__":
     test_data_integrity()
-
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta, date
-from typing import Set, List, Tuple, Optional, Union
-
-# ... [其他函数保持不变] ...
-
-
-
-# ... [其他函数保持不变] ...
