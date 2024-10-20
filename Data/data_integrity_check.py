@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 import glob
+import logging
 from datetime import datetime, timedelta, date
 from typing import Set, List, Tuple, Optional, Union
 
@@ -91,34 +92,6 @@ def check_data_content(df: pd.DataFrame) -> List[str]:
     
     return issues_found
 
-def print_summary(df: pd.DataFrame, issues_found: List[str], period_name: str) -> None:
-    """
-    Print a summary of the data integrity check.
-
-    Args:
-    df (pd.DataFrame): The dataframe that was checked.
-    issues_found (List[str]): List of issues found during the check.
-    period_name (str): Name of the period (e.g., "Daily", "Weekly", "Quarterly").
-    """
-    print("\nCheck Status Summary:")
-    if issues_found:
-        print("The following issues were found:")
-        for issue in issues_found:
-            print(f"- {issue}")
-    else:
-        print("No issues found. Data integrity is good.")
-    
-    print("\nCheck Content Summary:")
-    print(f"- Total rows: {len(df)}")
-    print(f"- Date range: from {df['day'].min()} to {df['day'].max()}")
-    print(f"- Columns checked: {', '.join(df.columns)}")
-    if period_name in ['Daily', 'Weekly', 'Monthly', 'Quarterly']:
-        print(f"- Number of {period_name.lower()} periods: {len(df)}")
-    else:
-        print(f"- Number of trading days: {len(df['day'].dt.date.unique())}")
-    
-    print(f"\n{period_name} data integrity check completed.")
-
 def get_last_trading_day(date_input: Union[datetime, date], holidays: Set[date], period: str) -> Optional[date]:
     """
     Get the last trading day of the period for a given date.
@@ -172,7 +145,74 @@ def get_last_trading_day(date_input: Union[datetime, date], holidays: Set[date],
     else:
         raise ValueError(f"Invalid period: {period}")
 
-def check_period_data_integrity(file_path: str, holiday_file: str, period: str) -> None:
+def generate_trading_hours(period: str) -> List[str]:
+    """
+    Generate trading hours based on the given period for Chinese stock market.
+    Starts from 09:30 and 13:00 but excludes these times from the final result.
+    
+    Args:
+    period (str): The trading period ('5min', '15min', or '60min').
+    
+    Returns:
+    List[str]: A list of trading times in 'HH:MM' format.
+    """
+    trading_sessions = [
+        ('09:30', '11:30'),
+        ('13:00', '15:00')
+    ]
+    
+    if period == '5min':
+        interval = timedelta(minutes=5)
+    elif period == '15min':
+        interval = timedelta(minutes=15)
+    elif period == '60min':
+        interval = timedelta(minutes=60)
+    else:
+        raise ValueError(f"Unsupported period: {period}")
+    
+    trading_hours = []
+    for start, end in trading_sessions:
+        current_time = datetime.strptime(start, '%H:%M')
+        end_time = datetime.strptime(end, '%H:%M')
+        while current_time <= end_time:
+            trading_hours.append(current_time.strftime('%H:%M'))
+            current_time += interval
+    
+    # Remove 09:30 and 13:00 from the generated times
+    trading_hours = [time for time in trading_hours if time not in ['09:30', '13:00']]
+    
+    return trading_hours
+
+def log_summary(df: pd.DataFrame, issues_found: List[str], period_name: str, logger: logging.Logger) -> None:
+    """
+    Log a summary of the data integrity check.
+
+    Args:
+    df (pd.DataFrame): The dataframe that was checked.
+    issues_found (List[str]): List of issues found during the check.
+    period_name (str): Name of the period (e.g., "Daily", "Weekly", "Quarterly").
+    logger (logging.Logger): Logger object for writing to log file.
+    """
+    logger.info("\nCheck Status Summary:")
+    if issues_found:
+        logger.info("The following issues were found:")
+        for issue in issues_found:
+            logger.info(f"- {issue}")
+    else:
+        logger.info("No issues found. Data integrity is good.")
+    
+    logger.info("\nCheck Content Summary:")
+    logger.info(f"- Total rows: {len(df)}")
+    logger.info(f"- Date range: from {df['day'].min()} to {df['day'].max()}")
+    logger.info(f"- Columns checked: {', '.join(df.columns)}")
+    if period_name in ['Daily', 'Weekly', 'Monthly', 'Quarterly']:
+        logger.info(f"- Number of {period_name.lower()} periods: {len(df)}")
+    else:
+        logger.info(f"- Number of trading days: {len(df['day'].dt.date.unique())}")
+    
+    logger.info(f"\n{period_name} data integrity check completed.")
+
+def check_period_data_integrity(file_path: str, holiday_file: str, period: str, logger: logging.Logger) -> None:
     """
     Check the integrity of period (daily, weekly, monthly, quarterly) stock data.
 
@@ -180,12 +220,16 @@ def check_period_data_integrity(file_path: str, holiday_file: str, period: str) 
     file_path (str): Path to the CSV file containing stock data.
     holiday_file (str): Path to the CSV file containing holiday dates.
     period (str): The period type ('daily', 'weekly', 'monthly', or 'quarterly').
+    logger (logging.Logger): Logger object for writing to log file.
     """
+    logger.info(f"Checking file: {os.path.basename(file_path)}")
+    print(f"Checking file: {os.path.basename(file_path)}")
+
     df = pd.read_csv(file_path, parse_dates=['day'])
     holidays = load_holidays(holiday_file)
     df = df.sort_values('day')
     
-    print(f"Checking {period} data integrity:")
+    logger.info(f"Checking {period} data integrity:")
     issues_found = []
     
     start_date = df['day'].min().date()
@@ -246,47 +290,9 @@ def check_period_data_integrity(file_path: str, holiday_file: str, period: str) 
 
     issues_found.extend(check_data_content(df))
     
-    print_summary(df, issues_found, period.capitalize())
+    log_summary(df, issues_found, period.capitalize(), logger)
 
-def generate_trading_hours(period: str) -> List[str]:
-    """
-    Generate trading hours based on the given period for Chinese stock market.
-    Starts from 09:30 and 13:00 but excludes these times from the final result.
-    
-    Args:
-    period (str): The trading period ('5min', '15min', or '60min').
-    
-    Returns:
-    List[str]: A list of trading times in 'HH:MM' format.
-    """
-    trading_sessions = [
-        ('09:30', '11:30'),
-        ('13:00', '15:00')
-    ]
-    
-    if period == '5min':
-        interval = timedelta(minutes=5)
-    elif period == '15min':
-        interval = timedelta(minutes=15)
-    elif period == '60min':
-        interval = timedelta(minutes=60)
-    else:
-        raise ValueError(f"Unsupported period: {period}")
-    
-    trading_hours = []
-    for start, end in trading_sessions:
-        current_time = datetime.strptime(start, '%H:%M')
-        end_time = datetime.strptime(end, '%H:%M')
-        while current_time <= end_time:
-            trading_hours.append(current_time.strftime('%H:%M'))
-            current_time += interval
-    
-    # Remove 09:30 and 13:00 from the generated times
-    trading_hours = [time for time in trading_hours if time not in ['09:30', '13:00']]
-    
-    return trading_hours
-
-def check_intraday_data_integrity(file_path: str, holiday_file: str, period: str) -> None:
+def check_intraday_data_integrity(file_path: str, holiday_file: str, period: str, logger: logging.Logger) -> None:
     """
     Check the integrity of intraday stock data for Chinese stock market.
     
@@ -294,14 +300,18 @@ def check_intraday_data_integrity(file_path: str, holiday_file: str, period: str
     file_path (str): Path to the CSV file containing intraday stock data.
     holiday_file (str): Path to the CSV file containing holiday dates.
     period (str): The trading period ('5min', '15min', or '60min').
+    logger (logging.Logger): Logger object for writing to log file.
     """
+    logger.info(f"Checking file: {os.path.basename(file_path)}")
+    print(f"Checking file: {os.path.basename(file_path)}")
+
     df = pd.read_csv(file_path, parse_dates=['day'])
     holidays = load_holidays(holiday_file)
     df = df.sort_values('day')
     
     trading_hours = generate_trading_hours(period)
     
-    print(f"Checking {period} data integrity:")
+    logger.info(f"Checking {period} data integrity:")
     issues_found = []
     
     for date, group in df.groupby(df['day'].dt.date):
@@ -313,20 +323,25 @@ def check_intraday_data_integrity(file_path: str, holiday_file: str, period: str
     
     issues_found.extend(check_data_content(df))
     
-    print_summary(df, issues_found, f"{period} intraday")
+    log_summary(df, issues_found, f"{period} intraday", logger)
 
 def test_data_integrity():
     """
     Test function to run integrity checks on various types of stock data.
-    
-    This function defines different types of data files and their corresponding
-    check functions and periods. It iterates through all defined data types
-    and runs the appropriate check for each type.
     """
     file_path = 'csv_files/'
     holiday_file = 'chinese_holidays.csv'
     symbol = "sz000001"
     timeframes = ["5m", "15m", "60m", "1d", "1w", "1m", "1q"]
+    log_dir = 'integrity_check_logs'
+    os.makedirs(log_dir, exist_ok=True)
+
+    # Set up logging
+    log_filename = f"{symbol}_integrity_check_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    log_path = os.path.join(log_dir, log_filename)
+    logging.basicConfig(filename=log_path, level=logging.INFO, 
+                        format='%(asctime)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger()
 
     data_types = {
         '1d': ('daily', check_period_data_integrity, 'daily'),
@@ -343,6 +358,8 @@ def test_data_integrity():
         matching_files = glob.glob(pattern)
         return matching_files[0] if matching_files else None
 
+    summary = []
+
     for timeframe in timeframes:
         if timeframe in data_types:
             print(f"\nTesting {timeframe} data integrity check for {symbol}:")
@@ -350,14 +367,24 @@ def test_data_integrity():
             filename = glob_file_match(symbol, timeframe)
             if filename:
                 try:
-                    check_function(filename, holiday_file, period)
+                    check_function(filename, holiday_file, period, logger)
+                    summary.append(f"{symbol} {timeframe}: Check completed.")
                 except Exception as e:
-                    print(f"Error occurred while checking {timeframe} data: {str(e)}")
+                    logger.error(f"Error occurred while checking {timeframe} data: {str(e)}")
+                    summary.append(f"{symbol} {timeframe}: Error during check.")
             else:
                 print(f"No matching file found for {symbol} with timeframe {timeframe}")
+                summary.append(f"{symbol} {timeframe}: No matching file found.")
             print("="*50)
         else:
             print(f"No check defined for timeframe: {timeframe}")
+            summary.append(f"{symbol} {timeframe}: No check defined.")
+
+    print("\nSummary of Integrity Checks:")
+    for item in summary:
+        print(item)
+    print(f"\nDetailed log can be found in {log_filename}")
 
 if __name__ == "__main__":
     test_data_integrity()
+    
