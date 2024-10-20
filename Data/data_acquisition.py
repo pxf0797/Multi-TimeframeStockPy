@@ -5,8 +5,8 @@ import os
 import logging
 from datetime import datetime, timedelta
 import glob
-from GetStock import GetStock
-from data_integrity_check import check_intraday_data_integrity, check_period_data_integrity
+from Data.GetStock import GetStock
+from Data.data_integrity_check import check_intraday_data_integrity, check_period_data_integrity
 
 def setup_logging(log_file):
     """Set up logging to file and console"""
@@ -216,5 +216,5 @@ if __name__ == "__main__":
         logging.exception("An error occurred during execution:")
 
     logging.debug("Script execution completed")
-
-print(f"Check the log files at: {log_file} and {os.path.splitext(log_file)[0]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+    
+    print(f"Check the log files at: {log_file} and {os.path.splitext(log_file)[0]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
