@@ -133,21 +133,42 @@ def get_last_trading_day(date_input: Union[datetime, date], holidays: Set[date],
         date_input = date_input.date()
     
     if period == 'week':
-        end_date = date_input + timedelta(days=6 - date_input.weekday())
+        # Find the last weekday (Friday) of the week
+        end_date = date_input + timedelta(days=(4 - date_input.weekday() + 7) % 7)
+        
+        # If Friday is a holiday, move backwards to find the last trading day
+        while end_date.weekday() >= 5 or end_date in holidays:
+            end_date -= timedelta(days=1)
+            
+        # Ensure we're still in the same week
+        if end_date < date_input:
+            return None
+        
+        return end_date
+    
     elif period == 'month':
+        # Find the last day of the month
         next_month = date_input.replace(day=28) + timedelta(days=4)
         end_date = next_month - timedelta(days=next_month.day)
+        
+        # Move backwards to find the last trading day of the month
+        while end_date.weekday() >= 5 or end_date in holidays:
+            end_date -= timedelta(days=1)
+        
+        return end_date
+    
     elif period == 'quarter':
+        # Find the last day of the quarter
         quarter_end = pd.Timestamp(date_input).to_period('Q').end_time.date()
-        end_date = quarter_end
+        
+        # Move backwards to find the last trading day of the quarter
+        while quarter_end.weekday() >= 5 or quarter_end in holidays:
+            quarter_end -= timedelta(days=1)
+        
+        return quarter_end
+    
     else:
         raise ValueError(f"Invalid period: {period}")
-    
-    for i in range(10):
-        day = end_date - timedelta(days=i)
-        if day.weekday() < 5 and day not in holidays:
-            return day
-    return None
 
 def check_period_data_integrity(file_path: str, holiday_file: str, period: str) -> None:
     """
