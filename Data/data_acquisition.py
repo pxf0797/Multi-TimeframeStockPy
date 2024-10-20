@@ -106,9 +106,9 @@ class DataAcquisition:
         logger.info(f"Holiday file path: {holiday_file}")
         
         if timeframe in ['5m', '15m', '60m']:
-            check_intraday_data_integrity(file_path=file_path, holiday_file=holiday_file, period=timeframe_types[timeframe])
+            check_intraday_data_integrity(file_path=file_path, holiday_file=holiday_file, period=timeframe_types[timeframe],logger=logger)
         else:
-            check_period_data_integrity(file_path=file_path, holiday_file=holiday_file, period=timeframe_types[timeframe])
+            check_period_data_integrity(file_path=file_path, holiday_file=holiday_file, period=timeframe_types[timeframe], logger=logger)
         
         logger.info(f"Data validation successful for {timeframe}")
         return True
