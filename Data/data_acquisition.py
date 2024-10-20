@@ -12,11 +12,23 @@ def setup_logging(log_file):
     """Set up logging to file and console"""
     log_format = '%(asctime)s - %(levelname)s - %(message)s'
     try:
-        logging.basicConfig(filename=log_file, level=logging.DEBUG, format=log_format, filemode='w')
+        # Create a timestamped log file
+        timestamped_log_file = f"{os.path.splitext(log_file)[0]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        
+        # Set up logging to the timestamped file
+        logging.basicConfig(filename=timestamped_log_file, level=logging.DEBUG, format=log_format, filemode='w')
+        
+        # Also set up logging to a fixed name file
+        file_handler = logging.FileHandler(log_file, mode='w')
+        file_handler.setFormatter(logging.Formatter(log_format))
+        logging.getLogger('').addHandler(file_handler)
+        
+        # Set up console logging
         console = logging.StreamHandler()
         console.setLevel(logging.DEBUG)
         console.setFormatter(logging.Formatter(log_format))
         logging.getLogger('').addHandler(console)
+        
         logging.debug("Logging setup completed. If you see this in the log file, logging is working.")
     except Exception as e:
         print(f"Error setting up logging: {str(e)}")
@@ -192,7 +204,7 @@ if __name__ == "__main__":
     
     # Set up logging
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    log_file = os.path.join(current_dir, f"data_acquisition_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+    log_file = os.path.join(current_dir, "data_acquisition.log")
     setup_logging(log_file)
     
     logging.debug(f"Log file path: {log_file}")
@@ -205,4 +217,4 @@ if __name__ == "__main__":
 
     logging.debug("Script execution completed")
 
-print(f"Check the log file at: {log_file}")
+print(f"Check the log files at: {log_file} and {os.path.splitext(log_file)[0]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
