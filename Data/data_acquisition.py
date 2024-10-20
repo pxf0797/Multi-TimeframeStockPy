@@ -11,16 +11,15 @@ from data_integrity_check import check_intraday_data_integrity, check_period_dat
 def setup_logging(log_file):
     """Set up logging to file and console"""
     log_format = '%(asctime)s - %(levelname)s - %(message)s'
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setLevel(logging.INFO)
-    file_handler.setFormatter(logging.Formatter(log_format))
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(logging.Formatter(log_format))
-    logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
+    logging.basicConfig(filename=log_file, level=logging.INFO, format=log_format)
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    console.setFormatter(logging.Formatter(log_format))
+    logging.getLogger('').addHandler(console)
 
 class DataAcquisition:
     def __init__(self, symbol: str, end_date_count: List[str], timeframes: List[str], data_dir: str):
+        self.logger = logging.getLogger(__name__)
         self.symbol = symbol
         end_date = datetime.strptime(end_date_count[0], '%Y-%m-%d')
         count = int(end_date_count[1])
@@ -123,7 +122,7 @@ class DataAcquisition:
         return True
 
     def validate_data(self):
-        logging.info("Validating data for all timeframes")
+        self.logger.info("Validating data for all timeframes")
         all_valid = True
         for tf in self.timeframes:
             file_pattern = os.path.join(self.data_dir, f'{self.symbol}_{tf}*.csv')
@@ -132,15 +131,15 @@ class DataAcquisition:
                 file_path = matching_files[0]  # Use the first matching file
                 try:
                     if self.validate_csv_data(file_path, tf):
-                        logging.info(f"Data validation successful for {tf}")
+                        self.logger.info(f"Data validation successful for {tf}")
                     else:
-                        logging.error(f"Data validation failed for {tf}")
+                        self.logger.error(f"Data validation failed for {tf}")
                         all_valid = False
                 except Exception as e:
-                    logging.error(f"Error during data validation for {tf}: {str(e)}")
+                    self.logger.error(f"Error during data validation for {tf}: {str(e)}")
                     all_valid = False
             else:
-                logging.error(f"No CSV file found for {tf} matching pattern: {file_pattern}")
+                self.logger.error(f"No CSV file found for {tf} matching pattern: {file_pattern}")
                 all_valid = False
         return all_valid
             
@@ -166,14 +165,14 @@ class DataAcquisition:
                 print(f"No CSV file found for {tf} matching pattern: {file_pattern}")
                 
     def simulate_fetch(self):
-        logging.info(f"Simulating data fetch for {self.symbol}")
+        self.logger.info(f"Simulating data fetch for {self.symbol}")
         self.fetch_data_all()
-        logging.info("Data fetch simulation completed")
+        self.logger.info("Data fetch simulation completed")
         self.verify_csv_files()
         if self.validate_data():
-            logging.info("Data validation successful")
+            self.logger.info("Data validation successful")
         else:
-            logging.error("Data validation failed")
+            self.logger.error("Data validation failed")
 
 if __name__ == "__main__":
     # This section will only run if the script is executed directly
