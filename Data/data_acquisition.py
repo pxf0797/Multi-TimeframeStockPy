@@ -3,9 +3,10 @@ import numpy as np
 from typing import List, Dict
 import os
 import logging
+import glob
 from datetime import datetime, timedelta
 from GetStock import GetStock
-from data_integrity_check import *
+from data_integrity_check import check_intraday_data_integrity
 
 logger = logging.getLogger(__name__)
 
@@ -89,50 +90,50 @@ class DataAcquisition:
 
     def validate_csv_data(self, file_name: str, timeframe: str) -> bool:
         logger.info(f"Start for {timeframe} check.")
-
-        if timeframe in ['5m', '15m', '60m']:
-            # Check for continuous data within trading hours
-            df['time'] = df['datetime'].dt.time
-            trading_hours = (pd.to_datetime('09:30:00').time(), pd.to_datetime('15:00:00').time())
-            df_trading = df[(df['time'] >= trading_hours[0]) & (df['time'] <= trading_hours[1])]
-            expected_intervals = {'5m': 5, '15m': 15, '60m': 60}
-            time_diff = df_trading['datetime'].diff().dt.total_seconds() / 60
-            if not np.allclose(time_diff.dropna(), expected_intervals[timeframe], atol=1):
-                logger.error(f"Inconsistent time intervals detected for {timeframe}")
-                return False
-        if timeframe == '5m':
-            check_5min_data_integrity(file_name,'chinese_holidays.csv')
-        elif timeframe == '15m':
-            check_15min_data_integrity(file_name,'chinese_holidays.csv')
-        elif timeframe == '60m':
-            check_60min_data_integrity(file_name,'chinese_holidays.csv')
-        elif timeframe == '1d':
-            # Check for continuous daily data
-            check_daily_data_integrity(file_name,'chinese_holidays.csv')
-        elif timeframe == '1w':
-            # Check for continuous weekly data
-            check_weekly_data_integrity(file_name,'chinese_holidays.csv')
-        elif timeframe == '1m':
-            # Check for continuous monthly data
-            check_60min_data_integrity(file_name,'chinese_holidays.csv')
-        elif timeframe == '1q':
-            # Check for continuous quarterly data
-            check_quarterly_data_integrity(file_name,'chinese_holidays.csv')
-
+        
+        timeframe_types = {
+            '5m': '5min',
+            '15m': '15min',
+            '60m': '60min',
+            '1d': 'daily',
+            '1w': 'weekly', 
+            '1m': 'monthly',
+            '1q': 'quarterly'
+        }
+        check_intraday_data_integrity(file_path = 'Data/csv_files', file_name=file_name, holiday_file='chinese_holidays.csv', timeframe=timeframe_types[timeframe])
+        
         logger.info(f"Data validation successful for {timeframe}")
         return True
 
     def validate_data(self):
         logger.info("Validating data for all timeframes")
-
-
+        all_valid = True
+        for tf in self.timeframes:
+            file_pattern = os.path.join(self.data_dir, f'{self.symbol}_{tf}*.csv')
+            matching_files = glob.glob(file_pattern)
+            if matching_files:
+                file_path = matching_files[0]  # Use the first matching file
+                try:
+                    if self.validate_csv_data(os.path.basename(file_path), tf):
+                        logger.info(f"Data validation successful for {tf}")
+                    else:
+                        logger.error(f"Data validation failed for {tf}")
+                        all_valid = False
+                except Exception as e:
+                    logger.error(f"Error during data validation for {tf}: {str(e)}")
+                    all_valid = False
+            else:
+                logger.error(f"No CSV file found for {tf} matching pattern: {file_pattern}")
+                all_valid = False
+        return all_valid
+            
     def verify_csv_files(self):
         logger.info("Verifying CSV files for all timeframes")
         for tf in self.timeframes:
-            start_date, end_date = self.period_item[tf]
-            filename = f'{self.symbol}_{tf}_{start_date}_{end_date}.csv'
-            file_path = os.path.join(self.data_dir, filename)
-            if os.path.exists(file_path):
+            file_pattern = os.path.join(self.data_dir, f'{self.symbol}_{tf}*.csv')
+            matching_files = glob.glob(file_pattern)
+            if matching_files:
+                file_path = matching_files[0]  # Use the first matching file
                 file_size = os.path.getsize(file_path)
                 logger.info(f"CSV file for {tf} exists at {file_path}")
                 logger.info(f"File size: {file_size} bytes")
@@ -141,12 +142,12 @@ class DataAcquisition:
                 else:
                     # Read and validate the CSV data
                     df = pd.read_csv(file_path)
-                    if self.validate_csv_data(df, tf):
+                    if self.validate_csv_data(os.path.basename(file_path), tf):
                         logger.info(f"CSV data for {tf} is valid")
                     else:
                         logger.error(f"CSV data for {tf} is invalid")
             else:
-                logger.error(f"CSV file for {tf} is missing at {file_path}")
+                logger.error(f"No CSV file found for {tf} matching pattern: {file_pattern}")
                 
     def simulate_fetch(self):
         logger.info(f"Simulating data fetch for {self.symbol}")
