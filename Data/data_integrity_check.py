@@ -4,28 +4,54 @@ from datetime import datetime, timedelta, date
 from typing import Set, List, Tuple, Optional, Union
 
 def load_holidays(holiday_file: str) -> Set[date]:
-    """Load holiday dates from a CSV file."""
+    """
+    Load holiday dates from a CSV file.
+    
+    Args:
+    holiday_file (str): Path to the CSV file containing holiday dates.
+    
+    Returns:
+    Set[date]: A set of holiday dates.
+    """
     holidays_df = pd.read_csv(holiday_file, parse_dates=['date'])
     return set(holidays_df['date'].dt.date)
 
 def check_data_content(df: pd.DataFrame) -> List[str]:
-    """Check the content of the dataframe for various data integrity issues."""
+    """
+    Check the content of the dataframe for various data integrity issues.
+    
+    Checks include:
+    1. Missing columns
+    2. Invalid numeric data
+    3. Suspicious price data (<=0 or >1000)
+    4. Negative trading volume
+    5. Inconsistent price data (e.g., low price higher than high price)
+    
+    Args:
+    df (pd.DataFrame): The dataframe to check.
+    
+    Returns:
+    List[str]: A list of issues found.
+    """
     issues_found = []
     expected_columns = ['day', 'open', 'high', 'low', 'close', 'volume']
     missing_columns = set(expected_columns) - set(df.columns)
     
+    # Check for missing columns
     if missing_columns:
         issues_found.append(f"Missing {len(missing_columns)} columns: {', '.join(missing_columns)}")
     
     numeric_columns = ['open', 'high', 'low', 'close', 'volume']
     for col in numeric_columns:
         if col in df.columns:
+            # Check for invalid numeric data
             invalid_rows = df[~pd.to_numeric(df[col], errors='coerce').notna()]
             if not invalid_rows.empty:
                 issues_found.append(f"'{col}' column has {len(invalid_rows)} rows with invalid data:")
                 for idx, row in invalid_rows.iterrows():
                     issues_found.append(f"  Date: {row['day']}, {col}: {row[col]} - Invalid numeric value")
             
+            # Check for suspicious price data
             if col != 'volume':
                 unreasonable_prices = df[(df[col] <= 0) | (df[col] > 1000)]
                 if not unreasonable_prices.empty:
@@ -34,6 +60,7 @@ def check_data_content(df: pd.DataFrame) -> List[str]:
                         reason = "Price <= 0" if row[col] <= 0 else "Price > 1000"
                         issues_found.append(f"  Date: {row['day']}, {col}: {row[col]} - {reason}")
     
+    # Check for negative trading volume
     if 'volume' in df.columns:
         unreasonable_volume = df[df['volume'] < 0]
         if not unreasonable_volume.empty:
@@ -41,6 +68,7 @@ def check_data_content(df: pd.DataFrame) -> List[str]:
             for idx, row in unreasonable_volume.iterrows():
                 issues_found.append(f"  Date: {row['day']}, Volume: {row['volume']} - Negative volume")
     
+    # Check for inconsistent price data
     price_issues = df[(df['low'] > df['high']) | (df['open'] > df['high']) | (df['open'] < df['low']) |
                       (df['close'] > df['high']) | (df['close'] < df['low'])]
     if not price_issues.empty:
@@ -62,7 +90,14 @@ def check_data_content(df: pd.DataFrame) -> List[str]:
     return issues_found
 
 def print_summary(df: pd.DataFrame, issues_found: List[str], period_name: str) -> None:
-    """Print a summary of the data integrity check."""
+    """
+    Print a summary of the data integrity check.
+
+    Args:
+    df (pd.DataFrame): The dataframe that was checked.
+    issues_found (List[str]): List of issues found during the check.
+    period_name (str): Name of the period (e.g., "Daily", "Weekly", "Quarterly").
+    """
     print("\nCheck Status Summary:")
     if issues_found:
         print("The following issues were found:")
@@ -82,8 +117,47 @@ def print_summary(df: pd.DataFrame, issues_found: List[str], period_name: str) -
     
     print(f"\n{period_name} data integrity check completed.")
 
+def get_last_trading_day(date_input: Union[datetime, date], holidays: Set[date], period: str) -> Optional[date]:
+    """
+    Get the last trading day of the period for a given date.
+
+    Args:
+    date_input (Union[datetime, date]): The input date.
+    holidays (Set[date]): Set of holiday dates.
+    period (str): The period type ('week', 'month', or 'quarter').
+
+    Returns:
+    Optional[date]: The last trading day of the period, or None if not found.
+    """
+    if isinstance(date_input, datetime):
+        date_input = date_input.date()
+    
+    if period == 'week':
+        end_date = date_input + timedelta(days=6 - date_input.weekday())
+    elif period == 'month':
+        next_month = date_input.replace(day=28) + timedelta(days=4)
+        end_date = next_month - timedelta(days=next_month.day)
+    elif period == 'quarter':
+        quarter_end = pd.Timestamp(date_input).to_period('Q').end_time.date()
+        end_date = quarter_end
+    else:
+        raise ValueError(f"Invalid period: {period}")
+    
+    for i in range(10):
+        day = end_date - timedelta(days=i)
+        if day.weekday() < 5 and day not in holidays:
+            return day
+    return None
+
 def check_period_data_integrity(file_path: str, holiday_file: str, period: str) -> None:
-    """Check the integrity of period (daily, weekly, monthly, quarterly) stock data."""
+    """
+    Check the integrity of period (daily, weekly, monthly, quarterly) stock data.
+
+    Args:
+    file_path (str): Path to the CSV file containing stock data.
+    holiday_file (str): Path to the CSV file containing holiday dates.
+    period (str): The period type ('daily', 'weekly', 'monthly', or 'quarterly').
+    """
     df = pd.read_csv(file_path, parse_dates=['day'])
     holidays = load_holidays(holiday_file)
     df = df.sort_values('day')
@@ -150,28 +224,6 @@ def check_period_data_integrity(file_path: str, holiday_file: str, period: str) 
     issues_found.extend(check_data_content(df))
     
     print_summary(df, issues_found, period.capitalize())
-
-def get_last_trading_day(date_input: Union[datetime, date], holidays: Set[date], period: str) -> Optional[date]:
-    """Get the last trading day of the period for a given date."""
-    if isinstance(date_input, datetime):
-        date_input = date_input.date()
-    
-    if period == 'week':
-        end_date = date_input + timedelta(days=6 - date_input.weekday())
-    elif period == 'month':
-        next_month = date_input.replace(day=28) + timedelta(days=4)
-        end_date = next_month - timedelta(days=next_month.day)
-    elif period == 'quarter':
-        quarter_end = pd.Timestamp(date_input).to_period('Q').end_time.date()
-        end_date = quarter_end
-    else:
-        raise ValueError(f"Invalid period: {period}")
-    
-    for i in range(10):
-        day = end_date - timedelta(days=i)
-        if day.weekday() < 5 and day not in holidays:
-            return day
-    return None
 
 def generate_trading_hours(period: str) -> List[str]:
     """
@@ -241,7 +293,13 @@ def check_intraday_data_integrity(file_path: str, holiday_file: str, period: str
     print_summary(df, issues_found, f"{period} intraday")
 
 def test_data_integrity():
-    """Test function to run integrity checks on various types of stock data."""
+    """
+    Test function to run integrity checks on various types of stock data.
+    
+    This function defines different types of data files and their corresponding
+    check functions and periods. It iterates through all defined data types
+    and runs the appropriate check for each type.
+    """
     file_path = 'csv_files/'
     holiday_file = 'chinese_holidays.csv'
 
