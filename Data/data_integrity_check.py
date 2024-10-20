@@ -48,7 +48,7 @@ def check_data_content(df: pd.DataFrame) -> List[str]:
     Checks include:
     1. Missing columns
     2. Invalid numeric data
-    3. Suspicious price data (<=0 or >1000)
+    3. Suspicious price data (<=0 or >100000)
     4. Negative trading volume
     5. Inconsistent price data (e.g., low price higher than high price)
     
@@ -78,11 +78,11 @@ def check_data_content(df: pd.DataFrame) -> List[str]:
             
             # Check for suspicious price data
             if col != 'volume':
-                unreasonable_prices = df[(df[col] <= 0) | (df[col] > 1000)]
+                unreasonable_prices = df[(df[col] <= 0) | (df[col] > 100000)]
                 if not unreasonable_prices.empty:
                     issues_found.append(f"'{col}' column has {len(unreasonable_prices)} rows with suspicious prices:")
                     for idx, row in unreasonable_prices.iterrows():
-                        reason = "Price <= 0" if row[col] <= 0 else "Price > 1000"
+                        reason = "Price <= 0" if row[col] <= 0 else "Price > 100000"
                         issues_found.append(f"  Date: {row['day']}, {col}: {row[col]} - {reason}")
     
     # Check for negative trading volume
