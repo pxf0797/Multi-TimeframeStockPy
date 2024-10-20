@@ -25,19 +25,25 @@ def check_data_content(df: pd.DataFrame) -> List[str]:
                 issues_found.append(f"'{col}' column has {len(invalid_rows)} rows with invalid data")
             
             if col != 'volume':
-                unreasonable_prices = df[(df[col] <= 0) | (df[col] > 1000)].index
+                unreasonable_prices = df[(df[col] <= 0) | (df[col] > 1000)]
                 if not unreasonable_prices.empty:
-                    issues_found.append(f"'{col}' column has {len(unreasonable_prices)} rows with suspicious prices")
+                    issues_found.append(f"'{col}' column has {len(unreasonable_prices)} rows with suspicious prices:")
+                    for idx, row in unreasonable_prices.iterrows():
+                        issues_found.append(f"  Date: {row['day']}, {col}: {row[col]}")
     
     if 'volume' in df.columns:
-        unreasonable_volume = df[df['volume'] < 0].index
+        unreasonable_volume = df[df['volume'] < 0]
         if not unreasonable_volume.empty:
-            issues_found.append(f"'volume' column has {len(unreasonable_volume)} rows with suspicious volume")
+            issues_found.append(f"'volume' column has {len(unreasonable_volume)} rows with suspicious volume:")
+            for idx, row in unreasonable_volume.iterrows():
+                issues_found.append(f"  Date: {row['day']}, Volume: {row['volume']}")
     
     price_issues = df[(df['low'] > df['high']) | (df['open'] > df['high']) | (df['open'] < df['low']) |
                       (df['close'] > df['high']) | (df['close'] < df['low'])]
     if not price_issues.empty:
-        issues_found.append(f"{len(price_issues)} rows with inconsistent price data")
+        issues_found.append(f"{len(price_issues)} rows with inconsistent price data:")
+        for idx, row in price_issues.iterrows():
+            issues_found.append(f"  Date: {row['day']}, Open: {row['open']}, High: {row['high']}, Low: {row['low']}, Close: {row['close']}")
     
     return issues_found
 
@@ -61,28 +67,6 @@ def print_summary(df: pd.DataFrame, issues_found: List[str], period_name: str) -
         print(f"- Number of trading days: {len(df['day'].dt.date.unique())}")
     
     print(f"\n{period_name} data integrity check completed.")
-
-def get_last_trading_day(date_input: Union[datetime, date], holidays: Set[date], period: str) -> Optional[date]:
-    """Get the last trading day of the period for a given date."""
-    if isinstance(date_input, datetime):
-        date_input = date_input.date()
-    
-    if period == 'week':
-        end_date = date_input + timedelta(days=6 - date_input.weekday())
-    elif period == 'month':
-        next_month = date_input.replace(day=28) + timedelta(days=4)
-        end_date = next_month - timedelta(days=next_month.day)
-    elif period == 'quarter':
-        quarter_end = pd.Timestamp(date_input).to_period('Q').end_time.date()
-        end_date = quarter_end
-    else:
-        raise ValueError(f"Invalid period: {period}")
-    
-    for i in range(10):
-        day = end_date - timedelta(days=i)
-        if day.weekday() < 5 and day not in holidays:
-            return day
-    return None
 
 def check_period_data_integrity(file_path: str, holiday_file: str, period: str) -> None:
     """Check the integrity of period (daily, weekly, monthly, quarterly) stock data."""
@@ -128,10 +112,14 @@ def check_period_data_integrity(file_path: str, holiday_file: str, period: str) 
     extra_periods = set(actual_periods) - set(expected_periods)
     
     if missing_periods:
-        issues_found.append(f"Missing {len(missing_periods)} {period} of data")
+        issues_found.append(f"Missing {len(missing_periods)} {period} of data:")
+        for missing_date in sorted(missing_periods):
+            issues_found.append(f"  Missing date: {missing_date}")
     
     if extra_periods:
-        issues_found.append(f"{len(extra_periods)} extra {period} present")
+        issues_found.append(f"{len(extra_periods)} extra {period} present:")
+        for extra_date in sorted(extra_periods):
+            issues_found.append(f"  Extra date: {extra_date}")
     
     if period != 'daily':
         incorrect_last_trading_days = []
@@ -141,11 +129,35 @@ def check_period_data_integrity(file_path: str, holiday_file: str, period: str) 
                 incorrect_last_trading_days.append((row['day'].date(), expected_last_trading_day))
         
         if incorrect_last_trading_days:
-            issues_found.append(f"{len(incorrect_last_trading_days)} {period} have incorrect last trading days")
+            issues_found.append(f"{len(incorrect_last_trading_days)} {period} have incorrect last trading days:")
+            for actual, expected in incorrect_last_trading_days:
+                issues_found.append(f"  Actual: {actual}, Expected: {expected}")
 
     issues_found.extend(check_data_content(df))
     
     print_summary(df, issues_found, period.capitalize())
+
+def get_last_trading_day(date_input: Union[datetime, date], holidays: Set[date], period: str) -> Optional[date]:
+    """Get the last trading day of the period for a given date."""
+    if isinstance(date_input, datetime):
+        date_input = date_input.date()
+    
+    if period == 'week':
+        end_date = date_input + timedelta(days=6 - date_input.weekday())
+    elif period == 'month':
+        next_month = date_input.replace(day=28) + timedelta(days=4)
+        end_date = next_month - timedelta(days=next_month.day)
+    elif period == 'quarter':
+        quarter_end = pd.Timestamp(date_input).to_period('Q').end_time.date()
+        end_date = quarter_end
+    else:
+        raise ValueError(f"Invalid period: {period}")
+    
+    for i in range(10):
+        day = end_date - timedelta(days=i)
+        if day.weekday() < 5 and day not in holidays:
+            return day
+    return None
 
 def generate_trading_hours(period: str) -> List[str]:
     """
@@ -239,3 +251,14 @@ def test_data_integrity():
 
 if __name__ == "__main__":
     test_data_integrity()
+
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta, date
+from typing import Set, List, Tuple, Optional, Union
+
+# ... [其他函数保持不变] ...
+
+
+
+# ... [其他函数保持不变] ...
