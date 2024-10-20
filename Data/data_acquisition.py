@@ -11,15 +11,20 @@ from data_integrity_check import check_intraday_data_integrity, check_period_dat
 def setup_logging(log_file):
     """Set up logging to file and console"""
     log_format = '%(asctime)s - %(levelname)s - %(message)s'
-    logging.basicConfig(filename=log_file, level=logging.INFO, format=log_format)
-    console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    console.setFormatter(logging.Formatter(log_format))
-    logging.getLogger('').addHandler(console)
+    try:
+        logging.basicConfig(filename=log_file, level=logging.DEBUG, format=log_format, filemode='w')
+        console = logging.StreamHandler()
+        console.setLevel(logging.DEBUG)
+        console.setFormatter(logging.Formatter(log_format))
+        logging.getLogger('').addHandler(console)
+        logging.debug("Logging setup completed. If you see this in the log file, logging is working.")
+    except Exception as e:
+        print(f"Error setting up logging: {str(e)}")
 
 class DataAcquisition:
     def __init__(self, symbol: str, end_date_count: List[str], timeframes: List[str], data_dir: str):
         self.logger = logging.getLogger(__name__)
+        self.logger.debug("DataAcquisition instance created")
         self.symbol = symbol
         end_date = datetime.strptime(end_date_count[0], '%Y-%m-%d')
         count = int(end_date_count[1])
@@ -122,6 +127,7 @@ class DataAcquisition:
         return True
 
     def validate_data(self):
+        self.logger.debug("Starting validate_data method")
         self.logger.info("Validating data for all timeframes")
         all_valid = True
         for tf in self.timeframes:
@@ -141,6 +147,7 @@ class DataAcquisition:
             else:
                 self.logger.error(f"No CSV file found for {tf} matching pattern: {file_pattern}")
                 all_valid = False
+        self.logger.debug("Finished validate_data method")
         return all_valid
             
     def verify_csv_files(self):
@@ -165,6 +172,7 @@ class DataAcquisition:
                 print(f"No CSV file found for {tf} matching pattern: {file_pattern}")
                 
     def simulate_fetch(self):
+        self.logger.debug("Starting simulate_fetch method")
         self.logger.info(f"Simulating data fetch for {self.symbol}")
         self.fetch_data_all()
         self.logger.info("Data fetch simulation completed")
@@ -173,6 +181,7 @@ class DataAcquisition:
             self.logger.info("Data validation successful")
         else:
             self.logger.error("Data validation failed")
+        self.logger.debug("Finished simulate_fetch method")
 
 if __name__ == "__main__":
     # This section will only run if the script is executed directly
@@ -182,8 +191,18 @@ if __name__ == "__main__":
     data_dir = "Data/csv_files"  # Update this to the actual path of your CSV files
     
     # Set up logging
-    log_file = f"data_acquisition_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    log_file = os.path.join(current_dir, f"data_acquisition_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
     setup_logging(log_file)
     
-    data_acq = DataAcquisition(symbol, end_date_count, timeframes, data_dir)
-    data_acq.simulate_fetch()
+    logging.debug(f"Log file path: {log_file}")
+    
+    try:
+        data_acq = DataAcquisition(symbol, end_date_count, timeframes, data_dir)
+        data_acq.simulate_fetch()
+    except Exception as e:
+        logging.exception("An error occurred during execution:")
+
+    logging.debug("Script execution completed")
+
+print(f"Check the log file at: {log_file}")
