@@ -172,9 +172,61 @@ def start_live_trading(config, model, optimized_params):
 def model_to_flat_params(model):
     return torch.cat([p.data.view(-1) for p in model.parameters()]).cpu().numpy()
 
+
+def visualize_model(config):
+    try:
+        logger.info("Initializing model for visualization...")
+        
+        # Try to load the saved model to get the correct input size
+        if os.path.exists(config['model_save_path']):
+            try:
+                saved_model = torch.load(config['model_save_path'], map_location=config['device'])
+                input_size = saved_model['lstm.weight_ih_l0'].size(1)
+                logger.info(f"Loaded input size from saved model: {input_size}")
+            except Exception as e:
+                logger.warning(f"Failed to load input size from saved model: {str(e)}")
+                input_size = config['input_size']
+                logger.info(f"Using input size from config: {input_size}")
+        else:
+            input_size = config['input_size']
+            logger.info(f"No saved model found. Using input size from config: {input_size}")
+        
+        # Update config with the correct input size
+        config['input_size'] = input_size
+        logger.info(f"Updated config input_size to: {config['input_size']}")
+        
+        # Create dummy featured_data for model initialization
+        dummy_sequence_length = config['sequence_length']
+        dummy_featured_data = {
+            '1d': pd.DataFrame(torch.randn(dummy_sequence_length, input_size).numpy())
+        }
+        
+        logger.info(f"Building model with input_size: {input_size}")
+        model_builder = ModelBuilder(config)
+        model = model_builder.build_model(dummy_featured_data)
+        
+        if os.path.exists(config['model_save_path']):
+            try:
+                model.load_state_dict(torch.load(config['model_save_path'], map_location=config['device']))
+                logger.info("Existing model loaded successfully.")
+            except RuntimeError as e:
+                logger.warning(f"Failed to load existing model due to: {str(e)}")
+                logger.info("Proceeding with visualization of the initial model structure.")
+        else:
+            logger.warning("No saved model found. Visualizing the initial model structure.")
+
+        logger.info("Generating model visualization...")
+        model_builder.visualize_model(model, config)
+        logger.info("Model visualization completed. Check 'model_visualization.png' for the result.")
+    except Exception as e:
+        logger.error(f"Error in model visualization: {str(e)}")
+        logger.error(f"Current config: {config}")
+        logger.error(f"Model structure: {model}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Multi-timeframe stock trading system")
-    parser.add_argument('--mode', choices=['acquire_data', 'train', 'backtest', 'optimize', 'live', 'full_cycle'], required=True, help="Operation mode")
+    parser.add_argument('--mode', choices=['acquire_data', 'train', 'backtest', 'optimize', 'live', 'full_cycle', 'visualize'], required=True, help="Operation mode")
     parser.add_argument('--continue_training', action='store_true', help="Continue training from saved parameters")
     args = parser.parse_args()
 
@@ -182,6 +234,10 @@ def main():
     config['signal_generator'] = SignalGenerator(config)  # Add signal_generator to config
 
     try:
+        if args.mode == 'visualize':
+            visualize_model(config)
+            return
+
         if args.mode == 'acquire_data' or args.mode == 'full_cycle':
             raw_data = acquire_data(config)
             if raw_data is None:

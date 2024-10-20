@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import logging
+from torchviz import make_dot
 
 logger = logging.getLogger(__name__)
 
@@ -53,12 +54,15 @@ class ModelBuilder:
             return None
 
         try:
-            sample_df = next(iter(featured_data.values()))
-            if sample_df.empty:
-                logger.error("Sample DataFrame is empty")
-                return None
+            if 'input_size' in self.config:
+                input_size = self.config['input_size']
+            else:
+                sample_df = next(iter(featured_data.values()))
+                if sample_df.empty:
+                    logger.error("Sample DataFrame is empty")
+                    return None
+                input_size = len(sample_df.columns) - 2  # -2 for 'returns' and 'log_returns'
 
-            input_size = len(sample_df.columns) - 2  # -2 for 'returns' and 'log_returns'
             logger.info(f"Building model with input_size: {input_size}")
             model = MultiTimeframeLSTM(
                 input_size,
@@ -173,6 +177,22 @@ class ModelBuilder:
             train_data[tf] = df.iloc[:split_idx]
             val_data[tf] = df.iloc[split_idx:]
         return train_data, val_data
+    def visualize_model(self, model, config):
+        if model is None:
+            logger.error("No model to visualize")
+            return
+
+        input_size = config['input_size']
+        sequence_length = config['sequence_length']
+        dummy_input = torch.randn(1, sequence_length, input_size)
+        dummy_volatility = torch.randn(1, sequence_length)
+        dummy_accuracy = torch.randn(1, sequence_length)
+        dummy_trend_strength = torch.randn(1, sequence_length)
+
+        output, _ = model(dummy_input, dummy_volatility, dummy_accuracy, dummy_trend_strength)
+        dot = make_dot(output, params=dict(model.named_parameters()))
+        dot.render("model_visualization", format="png", cleanup=True)
+        logger.info("Model visualization saved as 'model_visualization.png'")
 
 def print_model_summary(model, config):
     if model is None:
@@ -194,3 +214,7 @@ def print_model_summary(model, config):
     
     logger.info(f"\nInput shape: {dummy_input.shape}")
     logger.info(f"Output shape: {output.shape}")
+
+    # Visualize the model
+    model_builder = ModelBuilder(config)
+    model_builder.visualize_model(model, config)
