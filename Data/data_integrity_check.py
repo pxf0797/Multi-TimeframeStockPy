@@ -1,3 +1,25 @@
+"""
+Data Integrity Check Script
+
+This script checks the integrity of stock data, including daily, weekly, monthly, quarterly,
+and intraday data (5-minute, 15-minute, 60-minute intervals).
+
+Usage Instructions:
+1. Ensure your stock data CSV files are in the 'csv_files/' directory.
+2. Make sure the 'chinese_holidays.csv' file (containing Chinese stock market holiday information) 
+   is in the same directory as this script.
+3. Run this script from the command line: python data_integrity_check.py
+4. Check results will be displayed in the console, and detailed logs will be saved 
+   in the 'integrity_check_logs/' directory.
+
+Dependencies:
+- pandas
+- numpy
+
+Note: Make sure you have all necessary dependencies installed. 
+You can install them using: pip install pandas numpy
+"""
+
 import pandas as pd
 import numpy as np
 import os
@@ -225,6 +247,7 @@ def check_period_data_integrity(file_path: str, holiday_file: str, period: str, 
     logger.info(f"Checking file: {os.path.basename(file_path)}")
     print(f"Checking file: {os.path.basename(file_path)}")
 
+    # Load and preprocess data
     df = pd.read_csv(file_path, parse_dates=['day'])
     holidays = load_holidays(holiday_file)
     df = df.sort_values('day')
@@ -232,6 +255,7 @@ def check_period_data_integrity(file_path: str, holiday_file: str, period: str, 
     logger.info(f"Checking {period} data integrity:")
     issues_found = []
     
+    # Define date range and period parameters
     start_date = df['day'].min().date()
     end_date = df['day'].max().date()
     
@@ -248,6 +272,7 @@ def check_period_data_integrity(file_path: str, holiday_file: str, period: str, 
         current_period = pd.Timestamp(start_date).to_period('Q').start_time.date()
         delta = pd.DateOffset(months=3)
     
+    # Generate expected periods
     expected_periods = []
     while current_period <= end_date:
         if period == 'daily':
@@ -263,6 +288,7 @@ def check_period_data_integrity(file_path: str, holiday_file: str, period: str, 
     
     actual_periods = df['day'].dt.date.tolist()
     
+    # Check for missing and extra periods
     missing_periods = set(expected_periods) - set(actual_periods)
     extra_periods = set(actual_periods) - set(expected_periods)
     
@@ -278,6 +304,7 @@ def check_period_data_integrity(file_path: str, holiday_file: str, period: str, 
         for extra_date in sorted(extra_periods):
             issues_found.append(f"  Extra date: {extra_date}")
     
+    # Check for incorrect last trading days (except for daily data)
     if period != 'daily':
         incorrect_last_trading_days = []
         for _, row in df.iterrows():
@@ -291,12 +318,13 @@ def check_period_data_integrity(file_path: str, holiday_file: str, period: str, 
             for actual, expected in incorrect_last_trading_days:
                 issues_found.append(f"  Actual: {actual}, Expected: {expected}")
 
+    # Check data content
     issues_found.extend(check_data_content(df))
     
+    # Log summary
     log_summary(df, issues_found, period.capitalize(), logger)
     print("="*50)
     
-
 def check_intraday_data_integrity(file_path: str, holiday_file: str, period: str, logger: logging.Logger) -> None:
     """
     Check the integrity of intraday stock data for Chinese stock market.
@@ -310,15 +338,18 @@ def check_intraday_data_integrity(file_path: str, holiday_file: str, period: str
     logger.info(f"Checking file: {os.path.basename(file_path)}")
     print(f"Checking file: {os.path.basename(file_path)}")
 
+    # Load and preprocess data
     df = pd.read_csv(file_path, parse_dates=['day'])
     holidays = load_holidays(holiday_file)
     df = df.sort_values('day')
     
+    # Generate expected trading hours
     trading_hours = generate_trading_hours(period)
     
     logger.info(f"Checking {period} data integrity:")
     issues_found = []
     
+    # Check for missing time periods on trading days
     for date, group in df.groupby(df['day'].dt.date):
         if date.weekday() < 5 and date not in holidays:
             times = group['day'].dt.strftime('%H:%M').tolist()
@@ -327,15 +358,19 @@ def check_intraday_data_integrity(file_path: str, holiday_file: str, period: str
                 print(f"Date {date} is missing {len(missing_times)} time periods, detail see log.")
                 issues_found.append(f"Date {date} is missing {len(missing_times)} time periods: {', '.join(sorted(missing_times))}")
     
+    # Check data content
     issues_found.extend(check_data_content(df))
     
+    # Log summary
     log_summary(df, issues_found, f"{period} intraday", logger)
     print("="*50)
 
 def test_data_integrity():
     """
     Test function to run integrity checks on various types of stock data.
+    This function orchestrates the entire data integrity check process.
     """
+    # Define file paths and parameters
     file_path = 'csv_files/'
     holiday_file = 'chinese_holidays.csv'
     symbol = "sz000001"
@@ -350,6 +385,7 @@ def test_data_integrity():
                         format='%(asctime)s - %(levelname)s - %(message)s')
     logger = logging.getLogger()
 
+    # Define data types and corresponding check functions
     data_types = {
         '1d': ('daily', check_period_data_integrity, 'daily'),
         '1w': ('weekly', check_period_data_integrity, 'weekly'),
@@ -361,12 +397,16 @@ def test_data_integrity():
     }
 
     def glob_file_match(symbol, timeframe):
+        """
+        Find the matching file for a given symbol and timeframe using glob.
+        """
         pattern = os.path.join(file_path, f"{symbol}*{timeframe}*.csv")
         matching_files = glob.glob(pattern)
         return matching_files[0] if matching_files else None
 
     summary = []
 
+    # Iterate through timeframes and perform integrity checks
     for timeframe in timeframes:
         if timeframe in data_types:
             print(f"\nTesting {timeframe} data integrity check for {symbol}:")
@@ -382,11 +422,11 @@ def test_data_integrity():
             else:
                 print(f"No matching file found for {symbol} with timeframe {timeframe}")
                 summary.append(f"{symbol} {timeframe}: No matching file found.")
-            #print("="*50)
         else:
             print(f"No check defined for timeframe: {timeframe}")
             summary.append(f"{symbol} {timeframe}: No check defined.")
 
+    # Print summary of all checks
     print("\nSummary of Integrity Checks:")
     for item in summary:
         print(item)
