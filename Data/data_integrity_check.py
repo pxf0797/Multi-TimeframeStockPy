@@ -149,7 +149,7 @@ def check_period_data_integrity(file_path: str, holiday_file: str, period: str) 
 
 def generate_trading_hours(period: str) -> List[str]:
     """
-    Generate trading hours based on the given period.
+    Generate trading hours based on the given period for Chinese stock market.
     
     Args:
     period (str): The trading period ('5min', '15min', or '60min').
@@ -175,7 +175,7 @@ def generate_trading_hours(period: str) -> List[str]:
     for start, end in trading_sessions:
         current_time = datetime.strptime(start, '%H:%M')
         end_time = datetime.strptime(end, '%H:%M')
-        while current_time <= end_time:
+        while current_time < end_time:  # Changed <= to < to exclude end time
             trading_hours.append(current_time.strftime('%H:%M'))
             current_time += interval
     
@@ -183,7 +183,7 @@ def generate_trading_hours(period: str) -> List[str]:
 
 def check_intraday_data_integrity(file_path: str, holiday_file: str, period: str) -> None:
     """
-    Check the integrity of intraday stock data.
+    Check the integrity of intraday stock data for Chinese stock market.
     
     Args:
     file_path (str): Path to the CSV file containing intraday stock data.
@@ -204,7 +204,7 @@ def check_intraday_data_integrity(file_path: str, holiday_file: str, period: str
             times = group['day'].dt.strftime('%H:%M').tolist()
             missing_times = set(trading_hours) - set(times)
             if missing_times:
-                issues_found.append(f"Date {date} is missing {len(missing_times)} time periods")
+                issues_found.append(f"Date {date} is missing {len(missing_times)} time periods: {', '.join(sorted(missing_times))}")
     
     issues_found.extend(check_data_content(df))
     
