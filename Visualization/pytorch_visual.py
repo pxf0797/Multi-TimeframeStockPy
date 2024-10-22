@@ -1,3 +1,30 @@
+"""
+PyTorch Model Visualization Script
+
+This script provides functionality to visualize different PyTorch neural network architectures
+using NetworkX and Matplotlib. It includes several example model architectures and a
+visualization function to create a graphical representation of the model structure.
+
+Usage:
+1. Ensure you have the required libraries installed (torch, matplotlib, networkx, torchviz).
+2. Run this script directly to visualize the example models.
+3. To visualize your own PyTorch model, import the `torch_model_visualize` function and use it with your model.
+
+Example:
+    from pytorch_visual import torch_model_visualize
+    import torch.nn as nn
+
+    class YourModel(nn.Module):
+        # Your model definition here
+        ...
+
+    model = YourModel()
+    torch_model_visualize(model, "Your Custom Model")
+
+Note: This script requires a working installation of PyTorch and the ability to create
+matplotlib plots. Ensure your environment supports GUI or adjust for non-interactive environments.
+"""
+
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
@@ -5,8 +32,12 @@ import networkx as nx
 import random
 from torchviz import make_dot
 
-# Define a few different types of models
+# Define example neural network architectures
+
 class SmallFCNN(nn.Module):
+    """
+    A small fully connected neural network with three linear layers.
+    """
     def __init__(self):
         super(SmallFCNN, self).__init__()
         self.fc1 = nn.Linear(10, 20)
@@ -20,6 +51,10 @@ class SmallFCNN(nn.Module):
         return x
 
 class MediumCNN(nn.Module):
+    """
+    A medium-sized convolutional neural network with two convolutional layers
+    followed by two fully connected layers.
+    """
     def __init__(self):
         super(MediumCNN, self).__init__()
         self.conv1 = nn.Conv2d(1, 16, 3)
@@ -36,6 +71,10 @@ class MediumCNN(nn.Module):
         return x
 
 class LargeDeepCNN(nn.Module):
+    """
+    A larger and deeper convolutional neural network with three convolutional layers,
+    three fully connected layers, and dropout for regularization.
+    """
     def __init__(self):
         super(LargeDeepCNN, self).__init__()
         self.conv1 = nn.Conv2d(1, 32, 3)
@@ -58,6 +97,9 @@ class LargeDeepCNN(nn.Module):
         return x
 
 class SimpleRNN(nn.Module):
+    """
+    A simple recurrent neural network with two RNN layers followed by a linear layer.
+    """
     def __init__(self):
         super(SimpleRNN, self).__init__()
         self.rnn = nn.RNN(input_size=10, hidden_size=20, num_layers=2, batch_first=True)
@@ -69,9 +111,18 @@ class SimpleRNN(nn.Module):
         x = self.fc(x[:, -1, :])
         return x
 
-# Visualization function
 def torch_model_visualize(model, title="Model Visualization"):
+    """
+    Visualize a PyTorch model architecture using NetworkX and Matplotlib.
+
+    Args:
+        model (nn.Module): The PyTorch model to visualize.
+        title (str): The title for the visualization plot.
+
+    This function creates a graphical representation of the model's layers and connections.
+    """
     def extract_layers_from_model(model):
+        """Extract layers from the PyTorch model."""
         layers = []
         for name, module in model.named_modules():
             if len(name) > 0:
@@ -80,6 +131,7 @@ def torch_model_visualize(model, title="Model Visualization"):
         return layers
 
     def limit_nodes_display(layer_name, num_nodes, max_display=5):
+        """Limit the number of nodes displayed for large layers."""
         if num_nodes > max_display:
             return [
                 f"{layer_name}_1", f"{layer_name}_2", "...",
@@ -89,6 +141,7 @@ def torch_model_visualize(model, title="Model Visualization"):
             return [f"{layer_name}_{i+1}" for i in range(num_nodes)]
 
     def get_layer_description(layer_type, module):
+        """Generate a description for each layer type."""
         if layer_type == "Conv2d":
             return f"Conv2D\nIn: {module.in_channels}, Out: {module.out_channels}\nKernel: {module.kernel_size}"
         elif layer_type == "Linear":
@@ -101,6 +154,7 @@ def torch_model_visualize(model, title="Model Visualization"):
             return layer_type
 
     def determine_layer_role(idx, total_layers):
+        """Determine the role of a layer (input, hidden, or output)."""
         if idx == 0:
             return "Input Layer"
         elif idx == total_layers - 1:
@@ -109,6 +163,7 @@ def torch_model_visualize(model, title="Model Visualization"):
             return "Hidden Layer"
 
     def generate_graph(layers, aggregate_nodes=True):
+        """Generate a NetworkX graph from the model layers."""
         G = nx.DiGraph()
         pos = {}
         x_offset = 0
@@ -152,7 +207,7 @@ def torch_model_visualize(model, title="Model Visualization"):
     fig, ax = plt.subplots(figsize=(16, 9))
     G, pos = generate_graph(layers, aggregate_nodes=False)
 
-    # Define color map
+    # Define color map for different layer types
     layer_color_map = {
         "Conv2d": "skyblue",
         "Linear": "lightgreen",
@@ -168,6 +223,7 @@ def torch_model_visualize(model, title="Model Visualization"):
         color = layer_color_map.get(layer_type, layer_color_map["Default"])
         node_colors.append(color)
 
+    # Draw the graph
     nx.draw(G, pos, with_labels=False, node_color=node_colors, edge_color='blue',
             node_size=2000, font_size=10, font_color="white", ax=ax)
 
@@ -178,7 +234,7 @@ def torch_model_visualize(model, title="Model Visualization"):
     plt.show()
 
 if __name__ == "__main__":
-    # Instantiate models
+    # Instantiate example models
     models = [
         (SmallFCNN(), "Small Fully Connected NN"),
         (MediumCNN(), "Medium CNN"),
