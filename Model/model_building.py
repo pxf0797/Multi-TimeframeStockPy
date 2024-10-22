@@ -4,6 +4,7 @@ import torch.optim as optim
 import numpy as np
 import logging
 from torchviz import make_dot
+from Visualization.pytorch_visual import visualize_torch_model
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +216,25 @@ def print_model_summary(model, config):
     logger.info(f"\nInput shape: {dummy_input.shape}")
     logger.info(f"Output shape: {output.shape}")
 
-    # Visualize the model
-    model_builder = ModelBuilder(config)
-    model_builder.visualize_model(model, config)
+def visualize_model_wrapper(model, config):
+    """
+    Wrapper function to visualize a model using PyTorch visualization methods.
+    
+    Args:
+        model (torch.nn.Module): The model to visualize.
+        config (dict): Configuration with model input information.
+    """
+    input_size = config['input_size']
+    sequence_length = config['sequence_length']
+    
+    # Create dummy input tensors based on the model's expected input
+    dummy_input = torch.randn(1, sequence_length, input_size)
+    dummy_volatility = torch.randn(1, sequence_length)
+    dummy_accuracy = torch.randn(1, sequence_length)
+    dummy_trend_strength = torch.randn(1, sequence_length)
+    
+    input_tensors = (dummy_input, dummy_volatility, dummy_accuracy, dummy_trend_strength)
+    
+    # Call the generalized visualization method
+    visualize_torch_model(model, input_tensors, "Multi-Timeframe LSTM Model Visualization")
+    print("Model visualization completed. Check the generated image for the result.")

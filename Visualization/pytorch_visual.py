@@ -3,6 +3,7 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 import networkx as nx
 import random
+from torchviz import make_dot
 
 # Define a few different types of models
 class SmallFCNN(nn.Module):
@@ -176,14 +177,34 @@ def visualize_model(model, title="Model Visualization"):
     plt.title(title)
     plt.show()
 
-# Instantiate models
-models = [
-    (SmallFCNN(), "Small Fully Connected NN"),
-    (MediumCNN(), "Medium CNN"),
-    (LargeDeepCNN(), "Large Deep CNN"),
-    (SimpleRNN(), "Simple RNN")
-]
+def visualize_torch_model(model, input_tensors, title="Model Visualization"):
+    """
+    Generate a visualization of a PyTorch model's computational graph.
+    
+    Args:
+        model (torch.nn.Module): The PyTorch model to visualize.
+        input_tensors (tuple of torch.Tensor): The inputs to pass through the model.
+        title (str): Title for the visualization.
+    """
+    # Ensure the model is in evaluation mode for consistency
+    model.eval()
+    with torch.no_grad():
+        output = model(*input_tensors)
+    
+    # Use make_dot from torchviz to generate the graph
+    dot = make_dot(output, params=dict(model.named_parameters()))
+    dot.render(title.replace(" ", "_"), format="png")
+    print(f"Model visualization saved as '{title.replace(' ', '_')}.png'")
 
-# Visualize each model
-for model, title in models:
-    visualize_model(model, title)
+if __name__ == "__main__":
+    # Instantiate models
+    models = [
+        (SmallFCNN(), "Small Fully Connected NN"),
+        (MediumCNN(), "Medium CNN"),
+        (LargeDeepCNN(), "Large Deep CNN"),
+        (SimpleRNN(), "Simple RNN")
+    ]
+
+    # Visualize each model
+    for model, title in models:
+        visualize_model(model, title)
