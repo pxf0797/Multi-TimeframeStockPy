@@ -4,7 +4,7 @@ import torch.optim as optim
 import numpy as np
 import logging
 from torchviz import make_dot
-from Visualization.pytorch_visual import display_network_graph,custom_network_visualization,visualize_model2
+from Visualization.pytorch_visual import torch_model_visualize
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +194,7 @@ class ModelBuilder:
         #dot = make_dot(output, params=dict(model.named_parameters()))
         #dot.render("model_visualization", format="png", cleanup=True)
         #logger.info("Model visualization saved as 'model_visualization.png'")
-        visualize_model2(model)
+        torch_model_visualize(model)
 
 def print_model_summary(model, config):
     if model is None:
