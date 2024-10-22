@@ -70,7 +70,7 @@ class SimpleRNN(nn.Module):
         return x
 
 # Visualization function
-def visualize_model(model, title="Model Visualization"):
+def visualize_model2(model, title="Model Visualization"):
     def extract_layers_from_model(model):
         layers = []
         for name, module in model.named_modules():
@@ -196,6 +196,63 @@ def visualize_torch_model(model, input_tensors, title="Model Visualization"):
     dot.render(title.replace(" ", "_"), format="png")
     print(f"Model visualization saved as '{title.replace(' ', '_')}.png'")
 
+
+def custom_network_visualization(model):
+    """
+    Visualizes the model layers as a network graph using networkx.
+    
+    Args:
+        model (torch.nn.Module): The PyTorch model to visualize.
+    """
+    # Create an empty graph
+    graph = nx.DiGraph()
+    
+    # Traverse model layers and add them to the graph
+    layers = []
+    for name, module in model.named_children():
+        graph.add_node(name)
+        layers.append(name)
+
+    # Create connections to simulate layer relationships
+    for i in range(len(layers) - 1):
+        graph.add_edge(layers[i], layers[i + 1])
+    
+    # Draw the graph
+    plt.figure(figsize=(8, 6))
+    pos = nx.spring_layout(graph)  # Use a layout for better visuals
+    nx.draw(graph, pos, with_labels=True, node_size=2000, node_color='skyblue', font_size=10, font_weight='bold', edge_color='gray')
+    plt.title("Custom Network Visualization")
+    plt.show()
+
+
+def display_network_graph(model):
+    """
+    Directly display the model layers as a network graph using networkx.
+    
+    Args:
+        model (torch.nn.Module): The PyTorch model to visualize.
+    """
+    graph = nx.DiGraph()
+    
+    # Traverse model layers and add them to the graph
+    layers = []
+    for name, _ in model.named_children():
+        graph.add_node(name)
+        layers.append(name)
+    
+    # Add edges to simulate connections between layers
+    for i in range(len(layers) - 1):
+        graph.add_edge(layers[i], layers[i + 1])
+    
+    # Plot and show directly
+    plt.figure(figsize=(10, 7))
+    pos = nx.spring_layout(graph) 
+    nx.draw(graph, pos, with_labels=True, node_size=2000, node_color='skyblue',
+            font_size=10, font_weight='bold', edge_color='gray')
+    plt.title("Direct Visualization of Network Graph")
+    plt.show()
+
+
 if __name__ == "__main__":
     # Instantiate models
     models = [
@@ -207,4 +264,4 @@ if __name__ == "__main__":
 
     # Visualize each model
     for model, title in models:
-        visualize_model(model, title)
+        visualize_model2(model, title)

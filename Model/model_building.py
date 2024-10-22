@@ -4,7 +4,7 @@ import torch.optim as optim
 import numpy as np
 import logging
 from torchviz import make_dot
-from Visualization.pytorch_visual import visualize_torch_model
+from Visualization.pytorch_visual import display_network_graph,custom_network_visualization,visualize_model2
 
 logger = logging.getLogger(__name__)
 
@@ -183,17 +183,18 @@ class ModelBuilder:
             logger.error("No model to visualize")
             return
 
-        input_size = config['input_size']
-        sequence_length = config['sequence_length']
-        dummy_input = torch.randn(1, sequence_length, input_size)
-        dummy_volatility = torch.randn(1, sequence_length)
-        dummy_accuracy = torch.randn(1, sequence_length)
-        dummy_trend_strength = torch.randn(1, sequence_length)
+        #input_size = config['input_size']
+        #sequence_length = config['sequence_length']
+        #dummy_input = torch.randn(1, sequence_length, input_size)
+        #dummy_volatility = torch.randn(1, sequence_length)
+        #dummy_accuracy = torch.randn(1, sequence_length)
+        #dummy_trend_strength = torch.randn(1, sequence_length)
 
-        output, _ = model(dummy_input, dummy_volatility, dummy_accuracy, dummy_trend_strength)
-        dot = make_dot(output, params=dict(model.named_parameters()))
-        dot.render("model_visualization", format="png", cleanup=True)
-        logger.info("Model visualization saved as 'model_visualization.png'")
+        #output, _ = model(dummy_input, dummy_volatility, dummy_accuracy, dummy_trend_strength)
+        #dot = make_dot(output, params=dict(model.named_parameters()))
+        #dot.render("model_visualization", format="png", cleanup=True)
+        #logger.info("Model visualization saved as 'model_visualization.png'")
+        visualize_model2(model)
 
 def print_model_summary(model, config):
     if model is None:
@@ -216,25 +217,15 @@ def print_model_summary(model, config):
     logger.info(f"\nInput shape: {dummy_input.shape}")
     logger.info(f"Output shape: {output.shape}")
 
+
 def visualize_model_wrapper(model, config):
     """
-    Wrapper function to visualize a model using PyTorch visualization methods.
+    Wrapper function to directly visualize a model using the custom network graph style.
     
     Args:
         model (torch.nn.Module): The model to visualize.
         config (dict): Configuration with model input information.
     """
-    input_size = config['input_size']
-    sequence_length = config['sequence_length']
-    
-    # Create dummy input tensors based on the model's expected input
-    dummy_input = torch.randn(1, sequence_length, input_size)
-    dummy_volatility = torch.randn(1, sequence_length)
-    dummy_accuracy = torch.randn(1, sequence_length)
-    dummy_trend_strength = torch.randn(1, sequence_length)
-    
-    input_tensors = (dummy_input, dummy_volatility, dummy_accuracy, dummy_trend_strength)
-    
-    # Call the generalized visualization method
-    visualize_torch_model(model, input_tensors, "Multi-Timeframe LSTM Model Visualization")
-    print("Model visualization completed. Check the generated image for the result.")
+    # Directly call the network graph display function
+    display_network_graph(model)
+    print("Model visualization completed and displayed directly.")
