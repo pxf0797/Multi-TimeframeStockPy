@@ -217,15 +217,3 @@ def print_model_summary(model, config):
     logger.info(f"\nInput shape: {dummy_input.shape}")
     logger.info(f"Output shape: {output.shape}")
 
-
-def visualize_model_wrapper(model, config):
-    """
-    Wrapper function to directly visualize a model using the custom network graph style.
-    
-    Args:
-        model (torch.nn.Module): The model to visualize.
-        config (dict): Configuration with model input information.
-    """
-    # Directly call the network graph display function
-    display_network_graph(model)
-    print("Model visualization completed and displayed directly.")
