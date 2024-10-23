@@ -29,14 +29,14 @@ def load_config():
     # Load configuration from a file or environment variables
     config = {
         'asset': 'sz000001',
-        'end_date_count' : ['2024-10-18', '13000'], # for lesss len 1d, count is the date, others is period counts
+        'end_date_count': ['2024-10-18', '13000'],
         'timeframes': ['5m', '15m', '60m', '1d', '1m', '1q'],
         'ma_periods': [3, 5, 10, 20],
         'macd_params': (5, 10, 5),
-        'input_size': 33,  # Will be updated based on actual feature count
-        'hidden_size': 64,
+        'input_size': 33,
+        'hidden_size': 128,      # 增加隐藏层大小
         'num_layers': 2,
-        'num_heads': 4,
+        'num_heads': 8,          # 增加注意力头数
         'learning_rate': 0.001,
         'batch_size': 32,
         'epochs': 100,
@@ -46,9 +46,97 @@ def load_config():
         'account_balance': 100000,
         'risk_per_trade': 0.02,
         'max_position_size': 1.0,
-        'sequence_length': 20,  # Increased to capture more historical data
+        'sequence_length': 60,   # 增加序列长度
         'model_save_path': 'model_params.pth',
         'data_dir': 'Data/csv_files',
+        
+        # 新增多周期模型相关配置
+        'conv_channels': [64, 128, 256],  # CNN通道数
+        'kernel_size': 3,                 # CNN卷积核大小
+        'dropout_rate': 0.2,              # Dropout比率
+        'weight_decay': 1e-5,             # 权重衰减
+        'clip_grad_norm': 1.0,            # 梯度裁剪阈值
+        
+        # 训练相关配置
+        'train_ratio': 0.8,
+        'val_ratio': 0.1,
+        'test_ratio': 0.1,
+        
+        # 早停相关配置
+        'early_stopping_patience': 10,
+        'early_stopping_min_delta': 1e-4,
+        
+        # 模型保存相关
+        'checkpoint_dir': 'checkpoints',
+        'save_best_only': True,
+        
+        # 特征工程相关
+        'feature_groups': {
+            'price': ['open', 'high', 'low', 'close'],
+            'volume': ['volume'],
+            'technical': ['MA5', 'MA10', 'MA20', 'MA60',
+                        'RSI', 'MACD', 'MACD_signal', 'MACD_hist',
+                        'BB_upper', 'BB_middle', 'BB_lower'],
+            'volatility': ['ATR', 'Volatility'],
+            'trend': ['Trend_Strength', 'Accuracy'],
+        },
+        
+        # 周期特定配置
+        'period_specific': {
+            '5m': {
+                'lookback': 24,  # 一天
+                'features': ['intraday_range', 'time_of_day']
+            },
+            '15m': {
+                'lookback': 32,  # 一天
+                'features': ['intraday_range', 'time_of_day']
+            },
+            '60m': {
+                'lookback': 48,  # 三天
+                'features': ['intraday_pattern', 'session_progress']
+            },
+            '1d': {
+                'lookback': 60,  # 三个月
+                'features': ['gap_up', 'gap_down', 'swing_high', 'swing_low']
+            },
+            '1m': {
+                'lookback': 24,  # 两年
+                'features': ['monthly_return', 'seasonal_factor']
+            },
+            '1q': {
+                'lookback': 12,  # 三年
+                'features': ['quarterly_growth', 'yoy_change']
+            }
+        },
+        
+        # 模型评估指标
+        'metrics': {
+            'classification': ['accuracy', 'precision', 'recall', 'f1'],
+            'regression': ['mse', 'mae', 'r2', 'mape']
+        },
+        
+        # 优化器配置
+        'optimizer': {
+            'type': 'adam',
+            'params': {
+                'lr': 0.001,
+                'betas': (0.9, 0.999),
+                'eps': 1e-8,
+                'weight_decay': 1e-5
+            }
+        },
+        
+        # 学习率调度器配置
+        'scheduler': {
+            'type': 'reduce_lr_on_plateau',
+            'params': {
+                'mode': 'min',
+                'factor': 0.5,
+                'patience': 5,
+                'verbose': True,
+                'min_lr': 1e-6
+            }
+        }
     }
     return config
 
