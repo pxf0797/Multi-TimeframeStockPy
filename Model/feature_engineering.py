@@ -1,286 +1,230 @@
-import pandas as pd
-import numpy as np
-from ta_wrapper import ta
-from Utils.utils import handle_nan_inf
-import logging
+# feature_engineering.py
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+import numpy as np
+import pandas as pd
+from typing import Dict, List, Tuple
+from sklearn.preprocessing import StandardScaler
+from scipy.stats import skew, kurtosis
 
 class FeatureEngineer:
-    def __init__(self, config):
-        self.config = config
-
-    def engineer_features(self, data):
-        """
-        Main method to engineer features for all timeframes.
+    """特征工程主类"""
+    
+    def __init__(self, lookback_periods: List[int] = [5, 10, 20]):
+        self.lookback_periods = lookback_periods
+        self.scaler = StandardScaler()
         
-        Args:
-            data (dict): Dictionary of DataFrames for each timeframe.
+    def create_time_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """创建时间特征"""
+        df = df.copy()
         
-        Returns:
-            dict: Dictionary of DataFrames with engineered features for each timeframe.
-        """
-        featured_data = {}
-        for tf, df in data.items():
-            logger.info(f"Processing timeframe: {tf}")
-            logger.info(f"DataFrame shape: {df.shape}")
-            if df.empty:
-                logger.warning(f"Empty DataFrame for timeframe {tf}")
-                continue
-            try:
-                required_columns = ['open', 'high', 'low', 'close', 'volume']
-                if not all(col in df.columns for col in required_columns):
-                    missing_columns = [col for col in required_columns if col not in df.columns]
-                    raise ValueError(f"Missing required columns: {missing_columns}")
-
-                df = self.calculate_technical_indicators(df)
-                df = self.calculate_volatility(df)
-                df = self.calculate_trend_strength(df)
-                df = self.calculate_volume_indicators(df)
-                df = self.calculate_wave_trend(df)
-                df = self.calculate_accuracy(df)
-                df = handle_nan_inf(df)  # Handle NaN and Inf values
-                df = self.normalize_features(df)  # Normalize features
-                df = self.maintain_sequence_length(df)
-                
-                # Ensure required columns are present with correct capitalization
-                required_features = ['Volatility', 'Accuracy', 'trend_strength', 'ATR']
-                for feature in required_features:
-                    if feature not in df.columns:
-                        df[feature] = 0  # Set to 0 if not calculated
-                
-                featured_data[tf] = df
-                logger.info(f"Engineered features shape: {df.shape}")
-                logger.info(f"Columns: {df.columns}")
-            except Exception as e:
-                logger.error(f"Error processing timeframe {tf}: {e}", exc_info=True)
-        return featured_data
-
-    def calculate_technical_indicators(self, df):
-        """
-        Calculate various technical indicators.
+        # 时间特征
+        df['hour'] = df.index.hour
+        df['minute'] = df.index.minute
+        df['day_of_week'] = df.index.dayofweek
+        df['day_of_month'] = df.index.day
+        df['week_of_year'] = df.index.isocalendar().week
         
-        Args:
-            df (pd.DataFrame): Input DataFrame with OHLCV data.
+        # 交易时段特征
+        df['is_morning'] = ((df['hour'] >= 9) & (df['hour'] < 12)).astype(int)
+        df['is_afternoon'] = ((df['hour'] >= 13) & (df['hour'] < 15)).astype(int)
         
-        Returns:
-            pd.DataFrame: DataFrame with added technical indicators.
-        """
-        if df.empty:
-            logger.warning("Empty DataFrame passed to calculate_technical_indicators")
-            return df
-
-        # Calculate Moving Averages
-        for period in self.config['ma_periods']:
-            df[f'ma_{period}'] = df['close'].rolling(window=period, min_periods=1).mean()
+        return df
+    
+class FeatureEngineer:
+    def create_price_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """创建价格特征"""
+        df = df.copy()
         
-        # Calculate MACD
-        fast, slow, signal = self.config['macd_params']
-        try:
-            df['ema_fast'] = df['close'].ewm(span=fast, adjust=False, min_periods=1).mean()
-            df['ema_slow'] = df['close'].ewm(span=slow, adjust=False, min_periods=1).mean()
-            df['macd'] = df['ema_fast'] - df['ema_slow']
-            df['macd_signal'] = df['macd'].ewm(span=signal, adjust=False, min_periods=1).mean()
-            df['macd_hist'] = df['macd'] - df['macd_signal']
-        except Exception as e:
-            logger.error(f"Error calculating MACD: {e}", exc_info=True)
+        for period in self.lookback_periods:
+            # 价格动量
+            df[f'price_momentum_{period}'] = df['close'].pct_change(period)
+            
+            # 价格波动率
+            df[f'price_volatility_{period}'] = df['close'].rolling(period).std() / df['close'].rolling(period).mean()
+            
+            # 价格趋势
+            df[f'price_trend_{period}'] = (df['close'] - df['close'].rolling(period).mean()) / df['close'].rolling(period).std()
+            
+            # 价格区间
+            df[f'price_range_{period}'] = (df['high'].rolling(period).max() - df['low'].rolling(period).min()) / df['close']
+            
+            # 价格分位数
+            df[f'price_quantile_{period}'] = (df['close'] - df['low'].rolling(period).min()) / \
+                (df['high'].rolling(period).max() - df['low'].rolling(period).min())
         
-        # Calculate RSI
-        try:
+        return df
+    
+    def create_volume_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """创建成交量特征"""
+        df = df.copy()
+        
+        for period in self.lookback_periods:
+            # 成交量趋势
+            df[f'volume_trend_{period}'] = df['volume'].rolling(period).mean().pct_change()
+            
+            # 成交量波动率
+            df[f'volume_volatility_{period}'] = df['volume'].rolling(period).std() / df['volume'].rolling(period).mean()
+            
+            # 量价相关性
+            df[f'volume_price_corr_{period}'] = df['volume'].rolling(period).corr(df['close'])
+            
+            # 成交量比率
+            df[f'volume_ratio_{period}'] = df['volume'] / df['volume'].rolling(period).mean()
+            
+            # 成交量分布
+            df[f'volume_skew_{period}'] = df['volume'].rolling(period).apply(lambda x: skew(x))
+            df[f'volume_kurt_{period}'] = df['volume'].rolling(period).apply(lambda x: kurtosis(x))
+        
+        return df
+    
+    def create_technical_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """创建技术指标特征"""
+        df = df.copy()
+        
+        for period in self.lookback_periods:
+            # RSI
             delta = df['close'].diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=14, min_periods=1).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=14, min_periods=1).mean()
-            rs = gain / loss.replace(0, np.finfo(float).eps)  # Avoid division by zero
-            df['rsi'] = 100 - (100 / (1 + rs))
-        except Exception as e:
-            logger.error(f"Error calculating RSI: {e}", exc_info=True)
-
-        # Calculate ATR
-        try:
+            gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+            rs = gain / loss
+            df[f'RSI_{period}'] = 100 - (100 / (1 + rs))
+            
+            # Stochastic Oscillator
+            low_min = df['low'].rolling(period).min()
+            high_max = df['high'].rolling(period).max()
+            df[f'K_{period}'] = 100 * (df['close'] - low_min) / (high_max - low_min)
+            df[f'D_{period}'] = df[f'K_{period}'].rolling(3).mean()
+            
+            # Bollinger Bands
+            middle = df['close'].rolling(period).mean()
+            std = df['close'].rolling(period).std()
+            df[f'BB_upper_{period}'] = middle + 2 * std
+            df[f'BB_lower_{period}'] = middle - 2 * std
+            df[f'BB_width_{period}'] = (df[f'BB_upper_{period}'] - df[f'BB_lower_{period}']) / middle
+            
+            # Average True Range (ATR)
             high_low = df['high'] - df['low']
-            high_close = np.abs(df['high'] - df['close'].shift())
-            low_close = np.abs(df['low'] - df['close'].shift())
+            high_close = abs(df['high'] - df['close'].shift())
+            low_close = abs(df['low'] - df['close'].shift())
             ranges = pd.concat([high_low, high_close, low_close], axis=1)
-            true_range = np.max(ranges, axis=1)
-            df['ATR'] = true_range.rolling(window=14, min_periods=1).mean()
-        except Exception as e:
-            logger.error(f"Error calculating ATR: {e}", exc_info=True)
+            true_range = ranges.max(axis=1)
+            df[f'ATR_{period}'] = true_range.rolling(period).mean()
         
-        # Calculate other indicators
-        try:
-            df['ema_12'] = df['close'].ewm(span=12, adjust=False, min_periods=1).mean()
-            df['ema_26'] = df['close'].ewm(span=26, adjust=False, min_periods=1).mean()
-            df['diff'] = df['ema_12'] - df['ema_26']
-            df['dea'] = df['diff'].ewm(span=9, adjust=False, min_periods=1).mean()
-            df['macd'] = 2 * (df['diff'] - df['dea'])
+        return df
+    
+    def create_cross_period_features(self, data_dict: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+        """创建跨周期特征"""
+        result_df = pd.DataFrame(index=data_dict[min(data_dict.keys())].index)
+        periods = list(data_dict.keys())
+        
+        for i in range(len(periods)-1):
+            current_period = periods[i]
+            next_period = periods[i+1]
             
-            df['mom'] = df['close'].diff(10)
+            # 价格趋势一致性
+            result_df[f'price_trend_consistency_{current_period}_{next_period}'] = \
+                np.sign(data_dict[current_period]['close'].pct_change()) == \
+                np.sign(data_dict[next_period]['close'].pct_change())
             
-            df['tsi'] = self.calculate_tsi(df['close'])
-        except Exception as e:
-            logger.error(f"Error calculating other indicators: {e}", exc_info=True)
-        
-        return df
-
-    def calculate_volatility(self, df):
-        """
-        Calculate volatility using standard deviation of percentage changes.
-        
-        Args:
-            df (pd.DataFrame): Input DataFrame.
-        
-        Returns:
-            pd.DataFrame: DataFrame with added volatility.
-        """
-        try:
-            df['Volatility'] = df['close'].pct_change().rolling(window=20, min_periods=1).std() * np.sqrt(252)
-        except Exception as e:
-            logger.error(f"Error calculating volatility: {e}", exc_info=True)
-        return df
-
-    def calculate_trend_strength(self, df):
-        """
-        Calculate trend strength using the difference between short-term and long-term moving averages.
-        
-        Args:
-            df (pd.DataFrame): Input DataFrame.
-        
-        Returns:
-            pd.DataFrame: DataFrame with added trend strength.
-        """
-        try:
-            df['trend_strength'] = (df['ma_5'] - df['ma_20']) / df['ma_20'].replace(0, np.finfo(float).eps)
-        except Exception as e:
-            logger.error(f"Error calculating trend strength: {e}", exc_info=True)
-        return df
-
-    def calculate_volume_indicators(self, df):
-        """
-        Calculate volume-based indicators.
-        
-        Args:
-            df (pd.DataFrame): Input DataFrame.
-        
-        Returns:
-            pd.DataFrame: DataFrame with added volume indicators.
-        """
-        try:
-            df['vol_ma_5'] = df['volume'].rolling(window=5, min_periods=1).mean()
-            df['vol_rate'] = (df['volume'] - df['vol_ma_5']) / df['vol_ma_5'].replace(0, np.finfo(float).eps)
-            df['obv'] = (np.sign(df['close'].diff()) * df['volume']).cumsum()
-        except Exception as e:
-            logger.error(f"Error calculating volume indicators: {e}", exc_info=True)
-        return df
-
-    def calculate_tsi(self, close, r=25, s=13):
-        """
-        Calculate True Strength Index (TSI).
-        
-        Args:
-            close (pd.Series): Close price series.
-            r (int): First smoothing period.
-            s (int): Second smoothing period.
-        
-        Returns:
-            pd.Series: TSI values.
-        """
-        try:
-            diff = close - close.shift(1)
-            abs_diff = abs(diff)
+            # 成交量趋势一致性
+            result_df[f'volume_trend_consistency_{current_period}_{next_period}'] = \
+                np.sign(data_dict[current_period]['volume'].pct_change()) == \
+                np.sign(data_dict[next_period]['volume'].pct_change())
             
-            smooth_diff = diff.ewm(span=r, adjust=False, min_periods=1).mean().ewm(span=s, adjust=False, min_periods=1).mean()
-            smooth_abs_diff = abs_diff.ewm(span=r, adjust=False, min_periods=1).mean().ewm(span=s, adjust=False, min_periods=1).mean()
-            
-            tsi = 100 * smooth_diff / smooth_abs_diff.replace(0, np.finfo(float).eps)
-            return tsi
-        except Exception as e:
-            logger.error(f"Error calculating TSI: {e}", exc_info=True)
-            return pd.Series(index=close.index)
-
-    def calculate_wave_trend(self, df, n1=10, n2=21):
-        """
-        Calculate WaveTrend indicator.
+            # MA趋势一致性
+            result_df[f'ma_trend_consistency_{current_period}_{next_period}'] = \
+                np.sign(data_dict[current_period]['MA_STATE']) == \
+                np.sign(data_dict[next_period]['MA_STATE'])
         
-        Args:
-            df (pd.DataFrame): Input DataFrame.
-            n1 (int): First period.
-            n2 (int): Second period.
+        return result_df
+    
+    def create_derivative_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """创建衍生特征"""
+        df = df.copy()
         
-        Returns:
-            pd.DataFrame: DataFrame with added WaveTrend indicators.
-        """
-        try:
-            ap = (df['high'] + df['low'] + df['close']) / 3
-            esa = ap.ewm(span=n1, adjust=False, min_periods=1).mean()
-            d = (ap - esa).abs().ewm(span=n1, adjust=False, min_periods=1).mean()
-            ci = (ap - esa) / (0.015 * d.replace(0, np.finfo(float).eps))
-            wt1 = ci.ewm(span=n2, adjust=False, min_periods=1).mean()
-            wt2 = wt1.rolling(window=4, min_periods=1).mean()
-            df['wavetrend'] = wt1
-            df['wavetrend_signal'] = wt2
-        except Exception as e:
-            logger.error(f"Error calculating WaveTrend: {e}", exc_info=True)
+        # 趋势强度指标
+        df['trend_strength'] = abs(df['MA_STATE']) * df['VOL_TREND'].abs()
+        
+        # 综合动量指标
+        df['momentum_index'] = df['MACD_MOM'] * df['VOL_RATE']
+        
+        # 价格突破指标
+        for period in self.lookback_periods:
+            ma_col = f'MA_{period}'
+            df[f'price_breakthrough_{period}'] = (df['close'] > df[ma_col]).astype(int)
+        
+        # 波动率预警指标
+        df['volatility_alert'] = ((df['MA_3_norm'] - df['MA_20_norm']).abs() > 0.05).astype(int)
+        
+        return df
+    
+    def process_features(self, df: pd.DataFrame, data_dict: Dict[str, pd.DataFrame] = None) -> pd.DataFrame:
+        """特征处理主函数"""
+        # 创建基础特征
+        df = self.create_time_features(df)
+        df = self.create_price_features(df)
+        df = self.create_volume_features(df)
+        df = self.create_technical_features(df)
+        
+        # 如果提供了多周期数据，创建跨周期特征
+        if data_dict is not None:
+            cross_period_features = self.create_cross_period_features(data_dict)
+            df = pd.concat([df, cross_period_features], axis=1)
+        
+        # 创建衍生特征
+        df = self.create_derivative_features(df)
+        
+        # 处理缺失值
+        df = self.handle_missing_values(df)
+        
+        # 特征标准化
+        df = self.standardize_features(df)
+        
+        return df
+    
+    def handle_missing_values(self, df: pd.DataFrame) -> pd.DataFrame:
+        """处理缺失值"""
+        # 对于时间序列数据，使用前向填充
+        df = df.ffill()
+        # 仍然存在的缺失值使用0填充
+        df = df.fillna(0)
+        return df
+    
+    def standardize_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """特征标准化"""
+        numeric_columns = df.select_dtypes(include=['float64', 'int64']).columns
+        df[numeric_columns] = self.scaler.fit_transform(df[numeric_columns])
         return df
 
-    def calculate_accuracy(self, df):
-        """
-        Calculate accuracy based on MACD crossovers.
-        
-        Args:
-            df (pd.DataFrame): Input DataFrame.
-        
-        Returns:
-            pd.DataFrame: DataFrame with added accuracy indicator.
-        """
-        try:
-            df['macd_signal'] = np.where(df['macd'] > df['macd_signal'], 1, -1)
-            df['price_direction'] = np.where(df['close'].diff() > 0, 1, -1)
-            df['correct_signal'] = np.where(df['macd_signal'] == df['price_direction'], 1, 0)
-            df['Accuracy'] = df['correct_signal'].rolling(window=20, min_periods=1).mean()
-        except Exception as e:
-            logger.error(f"Error calculating accuracy: {e}", exc_info=True)
-        return df
+class FeatureSelector:
+    """特征选择类"""
+    
+    def __init__(self, correlation_threshold: float = 0.95, importance_threshold: float = 0.01):
+        self.correlation_threshold = correlation_threshold
+        self.importance_threshold = importance_threshold
+    
+    def remove_highly_correlated(self, df: pd.DataFrame) -> pd.DataFrame:
+        """移除高相关特征"""
+        corr_matrix = df.corr().abs()
+        upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+        to_drop = [column for column in upper.columns if any(upper[column] > self.correlation_threshold)]
+        return df.drop(columns=to_drop)
+    
+    def select_features_by_importance(self, df: pd.DataFrame, importance_scores: pd.Series) -> pd.DataFrame:
+        """根据特征重要性选择特征"""
+        important_features = importance_scores[importance_scores > self.importance_threshold].index
+        return df[important_features]
 
-    def maintain_sequence_length(self, df):
-        """
-        Maintain a consistent sequence length for all DataFrames.
-        
-        Args:
-            df (pd.DataFrame): Input DataFrame.
-        
-        Returns:
-            pd.DataFrame: DataFrame with adjusted sequence length.
-        """
-        seq_length = self.config['sequence_length']
-        if len(df) > seq_length:
-            return df.iloc[-seq_length:]
-        elif len(df) < seq_length:
-            pad_length = seq_length - len(df)
-            pad_df = pd.DataFrame(index=range(pad_length), columns=df.columns)
-            return pd.concat([pad_df, df]).reset_index(drop=True)
-        else:
-            return df
-
-    def normalize_features(self, df):
-        """
-        Normalize features using min-max scaling.
-        
-        Args:
-            df (pd.DataFrame): Input DataFrame.
-        
-        Returns:
-            pd.DataFrame: DataFrame with normalized features.
-        """
-        try:
-            for column in df.columns:
-                if column not in ['open', 'high', 'low', 'close', 'volume']:
-                    min_val = df[column].min()
-                    max_val = df[column].max()
-                    if min_val != max_val:
-                        df[column] = (df[column] - min_val) / (max_val - min_val)
-                    else:
-                        df[column] = 0  # or another appropriate value for constant features
-        except Exception as e:
-            logger.error(f"Error normalizing features: {e}", exc_info=True)
-        return df
+if __name__ == "__main__":
+    # 示例使用
+    feature_engineer = FeatureEngineer()
+    feature_selector = FeatureSelector()
+    
+    # 假设我们有示例数据
+    sample_data = pd.DataFrame()  # 添加实际数据
+    
+    # 处理特征
+    processed_df = feature_engineer.process_features(sample_data)
+    
+    # 特征选择
+    selected_df = feature_selector.remove_highly_correlated(processed_df)
